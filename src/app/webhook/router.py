@@ -23,19 +23,18 @@ def verify_webhook(
 
 @router.post("")
 async def receive_webhook(request: Request):
-    signature = request.headers.get("X-Hub-Signature-256", "")
     body = await request.body()
-
-    if not verify_signature(body, signature, settings.META_APP_SECRET):
-        raise HTTPException(status_code=401, detail="Invalid signature")
-
     payload = json.loads(body)
-
+    
     for entry in payload.get("entry", []):
         for messaging in entry.get("messaging", []):
-            sender_id: str = messaging.get("sender", {}).get("id", "")
-            text: str = messaging.get("message", {}).get("text", "")
-            if sender_id and text:
-                logger.info("Mensaje recibido | sender=%s | texto=%s", sender_id, text)
-
+            sender_id = messaging.get("sender", {}).get("id", "")
+            text = messaging.get("message", {}).get("text", "")
+            is_echo = messaging.get("message", {}).get("is_echo", False)
+            
+            if sender_id and text and not is_echo:
+                logger.info("📨 MENSAJE ENTRANTE: sender=...%s | texto=%s", 
+                           sender_id[-4:], text[:50])
+                # TODO: llamar al orchestrator de análisis
+    
     return {"status": "ok"}
