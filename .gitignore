@@ -4,3 +4,19 @@ estructura.md
 
 instruccion.md
 
+hu.md
+
+
+# Conversaciones exportadas (datos reales de Instagram)
+src/data/conversations/
+src/data/tokens/
+
+# Archivo temporal de token
+/tmp/token.txt
+
+# Archivos de entorno
+.env
+*.env
+
+# eigo.txt (archivo personal)
+eigo.txt
