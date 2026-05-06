@@ -20,3 +20,76 @@ src/data/tokens/
 
 # eigo.txt (archivo personal)
 eigo.txt
+
+
+
+# =============================================================
+# .gitignore — Link Seguro / Phishing Detector
+# =============================================================
+
+# ── Entorno virtual ───────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── Variables de entorno y secrets ───────────────────────────
+.env
+.env.local
+.env.production
+.env.staging
+!.env.example
+
+# ── Python ────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+*.egg
+dist/
+build/
+
+# ── Testing ───────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.ruff_cache/
+.mypy_cache/
+
+# ── IDEs ──────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── Sistema operativo ─────────────────────────────────────────
+.DS_Store
+Thumbs.db
+eigo.txt
+
+# ── Datos sensibles del proyecto ─────────────────────────────
+# Conversaciones exportadas (datos reales de Instagram)
+src/data/conversations/
+data/conversations/
+
+# Tokens temporales
+/tmp/token.txt
+
+# ── Logs ──────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── ngrok ─────────────────────────────────────────────────────
+ngrok
+ngrok.exe
+ngrok-v3-stable-linux-amd64.tgz
+
+# ── Archivos temporales ───────────────────────────────────────
+*.tmp
+*.temp
+*.bak

@@ -23,6 +23,17 @@ class PhishingOrchestrator:
             asyncio.to_thread(self.text_analyzer.analyze, text),
         )
 
+        # Si el score local supera 0.3, consultar URLhaus para cada URL encontrada
+        if url_result.score > 0.3 and url_result.urls_found:
+            urlhaus_results = await asyncio.gather(
+                *[self.url_analyzer.analyze_with_urlhaus(u) for u in url_result.urls_found]
+            )
+            for uh in urlhaus_results:
+                if uh.get("query_status") == "is_online":
+                    url_result.score = min(url_result.score + 0.9, 1.0)
+                    url_result.reasons.append("URLhaus: URL confirmed active and malicious")
+                    break
+
         final_score = (
             url_result.score * settings.URL_WEIGHT
             + text_result.score * settings.TEXT_WEIGHT

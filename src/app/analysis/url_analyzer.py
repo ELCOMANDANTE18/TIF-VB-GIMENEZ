@@ -1,5 +1,8 @@
+import csv
 import re
 from pathlib import Path
+
+import httpx
 
 from app.models.schemas import URLResult
 from app.utils.logger import get_logger
@@ -7,6 +10,7 @@ from app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 _BLACKLIST_PATH = Path(__file__).parent.parent.parent / "data" / "blacklist.txt"
+_PHISHTANK_PATH = Path(__file__).parent.parent.parent / "data" / "blacklist" / "phishtank.csv"
 
 _URL_RE = re.compile(r'https?://[^\s<>"]+|www\.[^\s<>"]+', re.IGNORECASE)
 
@@ -24,14 +28,33 @@ _SUSPICIOUS_KEYWORDS = {
 
 class URLAnalyzer:
     def __init__(self) -> None:
-        self.blacklist = self._load_blacklist()
+        self.blacklist, self.phishtank_domains = self._load_blacklist()
 
-    def _load_blacklist(self) -> set[str]:
+    def _load_blacklist(self) -> tuple[set[str], set[str]]:
+        blacklist: set[str] = set()
+        phishtank_domains: set[str] = set()
+
         try:
-            return set(_BLACKLIST_PATH.read_text().splitlines())
+            with _PHISHTANK_PATH.open(newline="", encoding="utf-8") as f:
+                for row in csv.DictReader(f):
+                    url = row.get("url", "").strip()
+                    if url:
+                        domain = self._extract_domain(url)
+                        if domain:
+                            phishtank_domains.add(domain)
+            logger.info("PhishTank: %d domains loaded", len(phishtank_domains))
         except FileNotFoundError:
-            logger.warning("blacklist.txt not found at %s", _BLACKLIST_PATH)
-            return set()
+            logger.warning("phishtank.csv not found at %s", _PHISHTANK_PATH)
+        except Exception as exc:
+            logger.warning("Failed to load phishtank.csv: %s", exc)
+
+        try:
+            blacklist = set(_BLACKLIST_PATH.read_text().splitlines())
+            logger.info("blacklist.txt: %d entries loaded", len(blacklist))
+        except FileNotFoundError:
+            pass
+
+        return blacklist, phishtank_domains
 
     def analyze(self, text: str) -> URLResult:
         urls = _URL_RE.findall(text)
@@ -45,7 +68,7 @@ class URLAnalyzer:
             url_score = 0.0
             domain = self._extract_domain(url)
 
-            if domain in self.blacklist:
+            if domain in self.blacklist or domain in self.phishtank_domains:
                 url_score += 1.0
                 reasons.append(f"Blacklisted domain: {domain}")
 
@@ -74,6 +97,17 @@ class URLAnalyzer:
             urls_found=urls,
             reasons=reasons,
         )
+
+    async def analyze_with_urlhaus(self, url: str) -> dict:
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                response = await client.post(
+                    "https://urlhaus-api.abuse.ch/v1/url/",
+                    data={"url": url},
+                )
+                return response.json()
+        except Exception:
+            return {}
 
     @staticmethod
     def _extract_domain(url: str) -> str:
