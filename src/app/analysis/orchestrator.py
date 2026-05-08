@@ -2,6 +2,7 @@ import asyncio
 
 from app.analysis.url_analyzer import URLAnalyzer
 from app.analysis.text_analyzer import TextAnalyzer
+from app.db.supabase_client import save_analysis_result
 from app.models.schemas import AnalysisResult, RiskLevel
 from app.config import settings
 from app.utils.logger import get_logger
@@ -17,14 +18,18 @@ class PhishingOrchestrator:
     async def analyze(self, message: dict) -> AnalysisResult:
         sender_id: str = message.get("sender_id", "")
         text: str = message.get("text", "")
+        message_id: str = message.get("message_id", "")
+        conversation_id: str = message.get("conversation_id", "")
 
         url_result, text_result = await asyncio.gather(
             asyncio.to_thread(self.url_analyzer.analyze, text),
             asyncio.to_thread(self.text_analyzer.analyze, text),
         )
 
+        urlhaus_checked = False
         # Si el score local supera 0.3, consultar URLhaus para cada URL encontrada
         if url_result.score > 0.3 and url_result.urls_found:
+            urlhaus_checked = True
             urlhaus_results = await asyncio.gather(
                 *[self.url_analyzer.analyze_with_urlhaus(u) for u in url_result.urls_found]
             )
@@ -50,6 +55,21 @@ class PhishingOrchestrator:
             "Analysis done | sender=%s score=%.2f risk=%s",
             sender_id, final_score, risk_level,
         )
+
+        try:
+            await save_analysis_result(
+                message_id=message_id,
+                conversation_id=conversation_id,
+                sender_id=sender_id,
+                text_preview=text,
+                final_score=final_score,
+                risk_level=risk_level.value,
+                urls_found=url_result.urls_found,
+                reasons=url_result.reasons + text_result.patterns_matched,
+                urlhaus_checked=urlhaus_checked,
+            )
+        except Exception as exc:
+            logger.error("Supabase save_analysis_result failed: %s", exc)
 
         return AnalysisResult(
             sender_id=sender_id,

@@ -4,6 +4,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
 
 from app.analysis.orchestrator import PhishingOrchestrator
 from app.config import settings
+from app.db.supabase_client import save_message
 from app.models.schemas import RiskLevel
 from app.utils.logger import get_logger
 from app.webhook.validator import verify_signature
@@ -24,8 +25,20 @@ def verify_webhook(
     raise HTTPException(status_code=403, detail="Verification failed")
 
 
-async def _analyze_and_log(sender_id: str, text: str) -> None:
-    result = await _orchestrator.analyze({"sender_id": sender_id, "text": text})
+async def _analyze_and_log(
+    sender_id: str,
+    text: str,
+    recipient_id: str = "",
+    message_id: str = "",
+    conversation_id: str = "",
+) -> None:
+    result = await _orchestrator.analyze({
+        "sender_id": sender_id,
+        "text": text,
+        "recipient_id": recipient_id,
+        "message_id": message_id,
+        "conversation_id": conversation_id,
+    })
     reasons = result.url_result.reasons + result.text_result.patterns_matched
     reasons_str = "\n" + "\n".join(f"   → {r}" for r in reasons) if reasons else ""
 
@@ -54,12 +67,28 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
     for entry in payload.get("entry", []):
         for messaging in entry.get("messaging", []):
             sender_id = messaging.get("sender", {}).get("id", "")
+            recipient_id = messaging.get("recipient", {}).get("id", "")
+            message_id = messaging.get("message", {}).get("mid", "")
             text = messaging.get("message", {}).get("text", "")
+            timestamp = messaging.get("timestamp", 0)
             is_echo = messaging.get("message", {}).get("is_echo", False)
 
             if sender_id and text and not is_echo:
                 logger.info("Mensaje entrante: sender=...%s | texto=%s",
                             sender_id[-4:], text[:50])
-                background_tasks.add_task(_analyze_and_log, sender_id, text)
+                conv_id = ""
+                try:
+                    conv_id = await save_message(
+                        sender_id=sender_id,
+                        recipient_id=recipient_id,
+                        text=text,
+                        timestamp=timestamp,
+                        message_id=message_id,
+                    )
+                except Exception as exc:
+                    logger.warning("Supabase save_message failed: %s", exc)
+                background_tasks.add_task(
+                    _analyze_and_log, sender_id, text, recipient_id, message_id, conv_id
+                )
 
     return {"status": "ok"}
