@@ -34,4 +34,5 @@ class AnalysisResult(BaseModel):
     ai_explanation: str = ""
     ai_recommendation: str = ""
     ai_confidence: float = 0.0
-    ai_patterns: list[str] = []
+    ai_categoria: str = ""
+    ai_lifecycle: str = ""

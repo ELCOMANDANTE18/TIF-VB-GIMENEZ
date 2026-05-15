@@ -4,7 +4,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
 
 from app.analysis.orchestrator import PhishingOrchestrator
 from app.config import settings
-from app.db.supabase_client import save_message
+from app.db.sqlite_client import save_message
 from app.models.schemas import RiskLevel
 from app.utils.logger import get_logger
 from app.webhook.validator import verify_signature
@@ -44,17 +44,21 @@ async def _analyze_and_log(
 
     if result.risk_level == RiskLevel.HIGH:
         logger.warning(
-            "🔴 HIGH RISK detectado | sender=...%s score=%.2f%s",
-            sender_id[-4:], result.final_score, reasons_str,
+            "HIGH RISK detectado | sender=...%s score=%.2f categoria=%s lifecycle=%s%s",
+            sender_id[-4:],
+            result.final_score,
+            result.ai_categoria or "n/a",
+            result.ai_lifecycle or "n/a",
+            reasons_str,
         )
     elif result.risk_level == RiskLevel.MEDIUM:
         logger.warning(
-            "🟡 MEDIUM RISK detectado | sender=...%s score=%.2f%s",
+            "MEDIUM RISK detectado | sender=...%s score=%.2f%s",
             sender_id[-4:], result.final_score, reasons_str,
         )
     else:
         logger.info(
-            "🟢 LOW - mensaje limpio | sender=...%s score=%.2f%s",
+            "LOW - mensaje limpio | sender=...%s score=%.2f%s",
             sender_id[-4:], result.final_score, reasons_str,
         )
 
@@ -72,6 +76,7 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
             text = messaging.get("message", {}).get("text", "")
             timestamp = messaging.get("timestamp", 0)
             is_echo = messaging.get("message", {}).get("is_echo", False)
+            ig_conversation_id = messaging.get("message", {}).get("conversation_id", "")
 
             if sender_id and text and not is_echo:
                 logger.info("Mensaje entrante: sender=...%s | texto=%s",
@@ -84,9 +89,10 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
                         text=text,
                         timestamp=timestamp,
                         message_id=message_id,
+                        ig_conversation_id=ig_conversation_id,
                     )
                 except Exception as exc:
-                    logger.warning("Supabase save_message failed: %s", exc)
+                    logger.warning("SQLite save_message failed: %s", exc)
                 background_tasks.add_task(
                     _analyze_and_log, sender_id, text, recipient_id, message_id, conv_id
                 )

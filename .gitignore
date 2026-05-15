@@ -77,6 +77,10 @@ eigo.txt
 src/data/conversations/
 data/conversations/
 
+# Base de datos SQLite (contiene mensajes reales de Instagram)
+src/data/*.db
+*.db
+
 # Tokens temporales
 /tmp/token.txt
 

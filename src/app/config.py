@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=str(_BASE_DIR / ".env"),
         env_file_encoding="utf-8",
+        extra="ignore",
     )
     FACEBOOK_PAGE_ID: str
     META_APP_ID: str
@@ -22,10 +23,13 @@ class Settings(BaseSettings):
     FLIA_TEST_IG_USER_ID: str = ""
     FLIA_TEST_TOKEN: str = ""
 
-    # APIs externas (opcionales)
-    GROQ_API_KEY: str = ""
-    SUPABASE_URL: str = ""
-    SUPABASE_KEY: str = ""
-    SLACK_WEBHOOK_URL: str = ""
+    # UM Cloud IA
+    UM_API_KEY: str = ""
+    UM_BASE_URL: str = "https://ai.cloud.um.edu.ar/api/v1"
+    UM_MODEL: str = "gemma4-26b"
+
+    # Supabase — DESCARTADO por decisión del tutor
+    # SUPABASE_URL: str = ""
+    # SUPABASE_KEY: str = ""
 
 settings = Settings()

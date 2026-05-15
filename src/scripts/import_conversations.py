@@ -1,5 +1,5 @@
 """
-Importa los archivos conv_*.json de data/conversations/ a Supabase.
+Importa los archivos conv_*.json de data/conversations/ a SQLite.
 Uso: python scripts/import_conversations.py
 """
 
@@ -9,13 +9,12 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Permite importar módulos de app/ sin instalar el paquete
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-from app.db.supabase_client import save_message
+from app.db.sqlite_client import save_message
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -39,7 +38,10 @@ async def import_file(filepath: Path) -> tuple[int, int]:
         return 0, 0
 
     page_id = participants[0]["id"]
+    page_username = participants[0].get("username", "")
     external_id = participants[1]["id"]
+    external_username = participants[1].get("username", "")
+    ig_conversation_id = data.get("conversation_id", "")
 
     messages = data.get("messages", [])
     imported = 0
@@ -47,6 +49,8 @@ async def import_file(filepath: Path) -> tuple[int, int]:
 
     for msg in messages:
         sender_id = msg["from"]["id"]
+        # Si el remitente es la página monitoreada → mensaje saliente
+        es_entrante = sender_id != page_id
         recipient_id = external_id if sender_id == page_id else page_id
         text = msg.get("message", "")
         message_id = msg["id"]
@@ -56,6 +60,9 @@ async def import_file(filepath: Path) -> tuple[int, int]:
             logger.debug("Mensaje sin texto omitido: %s", message_id)
             continue
 
+        # participante siempre es el usuario externo (nunca la página)
+        participante_username = external_username
+
         try:
             conv_id = await save_message(
                 sender_id=sender_id,
@@ -63,16 +70,18 @@ async def import_file(filepath: Path) -> tuple[int, int]:
                 text=text,
                 timestamp=timestamp,
                 message_id=message_id,
+                ig_conversation_id=ig_conversation_id,
+                es_entrante=es_entrante,
+                participante_username=participante_username,
             )
+            direction = "↓ entrante" if es_entrante else "↑ saliente"
             logger.info(
-                "  [OK] msg=%.30s | conv=%s | from=%s",
-                message_id, conv_id, msg["from"]["username"],
+                "  [OK] %s | conv=%s | @%s | %.40s",
+                direction, conv_id, msg["from"]["username"], text,
             )
             imported += 1
         except Exception as exc:
-            logger.error(
-                "  [ERR] msg=%s | %s", message_id, exc
-            )
+            logger.error("  [ERR] msg=%s | %s", message_id, exc)
             errors += 1
 
     return imported, errors
@@ -85,12 +94,14 @@ async def main() -> None:
         print(f"No se encontraron archivos conv_*.json en {DATA_DIR}")
         return
 
+    print(f"Archivos a procesar: {len(conv_files)}\n")
+
     total_convs = 0
     total_imported = 0
     total_errors = 0
 
     for filepath in conv_files:
-        print(f"\n→ Procesando: {filepath.name}")
+        print(f"→ {filepath.name}")
         imported, errors = await import_file(filepath)
         total_convs += 1
         total_imported += imported

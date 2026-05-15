@@ -1,0 +1,105 @@
+[
+  {
+    "id": "TC01",
+    "tipo": "normal_greeting",
+    "descripcion": "Conversación normal entre conocidos",
+    "expected_severity": "LOW",
+    "expected_is_phishing": false,
+    "mensajes": [
+      {"sender": "amigo", "texto": "Hola como estás"},
+      {"sender": "usuario", "texto": "Todo bien y vos?"},
+      {"sender": "amigo", "texto": "Bien! Nos vemos mañana"}
+    ]
+  },
+  {
+    "id": "TC02",
+    "tipo": "credential_harvesting",
+    "descripcion": "Link de phishing directo con dominio en blacklist",
+    "expected_severity": "HIGH",
+    "expected_is_phishing": true,
+    "expected_mitre": "T1566.002",
+    "mensajes": [
+      {"sender": "atacante", "texto": "Tu cuenta fue reportada por infracción"},
+      {"sender": "atacante", "texto": "Verificá tu identidad: http://portal-bradesco.digital/"}
+    ]
+  },
+  {
+    "id": "TC03",
+    "tipo": "account_verification_scam",
+    "descripcion": "Suplantación de soporte de Instagram",
+    "expected_severity": "HIGH",
+    "expected_is_phishing": true,
+    "expected_mitre": "T1566.003",
+    "mensajes": [
+      {"sender": "instagram.support.team", "texto": "Hola! Somos el equipo de Instagram"},
+      {"sender": "instagram.support.team", "texto": "Tu cuenta tiene una infracción de derechos de autor"},
+      {"sender": "instagram.support.team", "texto": "Tenés 24 horas para apelar o tu cuenta será eliminada"},
+      {"sender": "instagram.support.team", "texto": "Completá el formulario: http://instagram-appeal-form.xyz/verify"}
+    ]
+  },
+  {
+    "id": "TC04",
+    "tipo": "pig_butchering_early",
+    "descripcion": "Inicio de pig butchering — approach y bond",
+    "expected_severity": "MEDIUM",
+    "expected_is_phishing": true,
+    "expected_lifecycle": "bond",
+    "mensajes": [
+      {"sender": "atacante", "texto": "Hola! Perdón me equivoqué de número"},
+      {"sender": "atacante", "texto": "Igual me alegra haberme equivocado, tenés un perfil hermoso"},
+      {"sender": "atacante", "texto": "¿A qué te dedicás? Yo tengo un negocio de inversiones muy exitoso"}
+    ]
+  },
+  {
+    "id": "TC05",
+    "tipo": "pig_butchering_advanced",
+    "descripcion": "Pig butchering en fase hook con crypto",
+    "expected_severity": "HIGH",
+    "expected_is_phishing": true,
+    "expected_category": "pig_butchering",
+    "mensajes": [
+      {"sender": "atacante", "texto": "Hola! Soy trader de crypto con mucha experiencia"},
+      {"sender": "atacante", "texto": "¿Querés que te enseñe a invertir? Yo gano 30% mensual"},
+      {"sender": "atacante", "texto": "Entrá a esta plataforma exclusiva: http://crypto-vip-signals.top/register"},
+      {"sender": "atacante", "texto": "Empezá con poco, 100 dólares y ves cómo crece"}
+    ]
+  },
+  {
+    "id": "TC06",
+    "tipo": "fake_giveaway",
+    "descripcion": "Sorteo falso con solicitud de datos",
+    "expected_severity": "HIGH",
+    "expected_is_phishing": true,
+    "expected_category": "fake_giveaway",
+    "mensajes": [
+      {"sender": "atacante", "texto": "Felicitaciones! Fuiste seleccionado ganador de nuestro sorteo"},
+      {"sender": "atacante", "texto": "Premio: iPhone 15 Pro. Para reclamarlo necesitamos verificar tu identidad"},
+      {"sender": "atacante", "texto": "Completá el formulario: http://premio-instagram-oficial.xyz/claim"}
+    ]
+  },
+  {
+    "id": "TC07",
+    "tipo": "otp_request",
+    "descripcion": "Solicitud de código de verificación SMS",
+    "expected_severity": "HIGH",
+    "expected_is_phishing": true,
+    "expected_category": "otp_request",
+    "mensajes": [
+      {"sender": "atacante", "texto": "Hola soy tu amigo Juan, perdí acceso a mi cuenta"},
+      {"sender": "atacante", "texto": "Instagram me mandó un código de verificación a tu número por error"},
+      {"sender": "atacante", "texto": "¿Me podés pasar el código que te llegó por SMS? Son 6 dígitos"}
+    ]
+  },
+  {
+    "id": "TC08",
+    "tipo": "normal_after_phishing",
+    "descripcion": "Mensaje normal después de uno sospechoso — no debe escalar",
+    "expected_severity": "LOW",
+    "expected_is_phishing": false,
+    "mensajes": [
+      {"sender": "amigo", "texto": "Verificá tu cuenta: http://portal-bradesco.digital/"},
+      {"sender": "amigo", "texto": "Igual eso lo mandé sin querer, borralo"},
+      {"sender": "amigo", "texto": "Cómo te va? Nos vemos el finde?"}
+    ]
+  }
+]

@@ -2,7 +2,12 @@ import asyncio
 
 from app.analysis.url_analyzer import URLAnalyzer
 from app.analysis.text_analyzer import TextAnalyzer
-from app.db.supabase_client import save_analysis_result, get_conversation_history
+from app.db.sqlite_client import (
+    save_analysis_result,
+    get_conversation_history,
+    get_conversation_info,
+)
+from app.analysis import conversation_observer
 from app.ai import groq_client
 from app.models.schemas import AnalysisResult, RiskLevel
 from app.config import settings
@@ -22,13 +27,18 @@ class PhishingOrchestrator:
         message_id: str = message.get("message_id", "")
         conversation_id: str = message.get("conversation_id", "")
 
+        # Leer estado previo antes de modificarlo
+        conv_info = await get_conversation_info(conversation_id)
+        prev_risk = conv_info.get("risk_level_actual", "LOW")
+        total_mensajes = conv_info.get("total_mensajes", 1)
+        username = conv_info.get("participante_username", "")
+
         url_result, text_result = await asyncio.gather(
             asyncio.to_thread(self.url_analyzer.analyze, text),
             asyncio.to_thread(self.text_analyzer.analyze, text),
         )
 
         urlhaus_checked = False
-        # Si el score local supera 0.3, consultar URLhaus para cada URL encontrada
         if url_result.score > 0.3 and url_result.urls_found:
             urlhaus_checked = True
             urlhaus_results = await asyncio.gather(
@@ -45,7 +55,6 @@ class PhishingOrchestrator:
             + text_result.score * settings.TEXT_WEIGHT
         )
 
-        # Mapa de riesgo para comparar niveles
         _risk_order = {RiskLevel.LOW: 0, RiskLevel.MEDIUM: 1, RiskLevel.HIGH: 2}
         _level_from_str = {"LOW": RiskLevel.LOW, "MEDIUM": RiskLevel.MEDIUM, "HIGH": RiskLevel.HIGH}
 
@@ -57,35 +66,65 @@ class PhishingOrchestrator:
             risk_level = RiskLevel.LOW
 
         final_score = heuristic_score
-        ai_explanation: str | None = None
-        ai_recommendation: str | None = None
+
+        # Campos del resultado IA con defaults
+        ai_severity: str = risk_level.value
+        ai_confidence: float = 0.0
+        ai_categoria: str = "none"
+        ai_mitre: str = "none"
+        ai_cialdini: list = []
+        ai_lifecycle: str = "n/a"
+        ai_suspicious_urls: list = []
+        ai_accion: str = "allow"
+        ai_explicacion_usuario: str = ""
+        ai_explicacion_analista: str = ""
 
         try:
-            history = await get_conversation_history(conversation_id, limit=10)
-            groq_result = await groq_client.analyze_conversation(
+            # Excluye el mensaje actual (ya guardado en DB) para no duplicarlo en el prompt
+            history = await get_conversation_history(
+                conversation_id, limit=50, exclude_message_id=message_id
+            )
+            mensajes_analizados = len(history) + 1
+
+            ai_result = await groq_client.analyze_conversation(
                 current_message=text,
                 conversation_history=history,
                 url_score=url_result.score,
                 text_score=text_result.score,
                 reasons=url_result.reasons + text_result.patterns_matched,
+                conversation_id=conversation_id,
             )
-            if groq_result:
-                groq_confidence: float = groq_result.get("confidence", 0.0)
-                groq_risk_str: str = groq_result.get("risk_level", "LOW")
-                groq_risk = _level_from_str.get(groq_risk_str, RiskLevel.LOW)
 
-                final_score = max(heuristic_score, groq_confidence)
-                if _risk_order[groq_risk] > _risk_order[risk_level]:
-                    risk_level = groq_risk
+            if ai_result:
+                ai_confidence = ai_result.get("confidence", 0.0)
+                ai_severity = ai_result.get("severity", risk_level.value)
+                ai_risk = _level_from_str.get(ai_severity, RiskLevel.LOW)
 
-                ai_explanation = groq_result.get("explanation")
-                ai_recommendation = groq_result.get("recommendation")
+                # Convertir severidad IA a score en la misma escala que el heurístico
+                # para no inflar el score cuando la IA dice LOW con alta confianza
+                _severity_to_score = {RiskLevel.LOW: 0.15, RiskLevel.MEDIUM: 0.55, RiskLevel.HIGH: 0.90}
+                ai_risk_score = _severity_to_score[ai_risk] * ai_confidence
+                final_score = max(heuristic_score, ai_risk_score)
+
+                if _risk_order[ai_risk] > _risk_order[risk_level]:
+                    risk_level = ai_risk
+
+                ai_categoria = ai_result.get("scam_category", "none")
+                ai_mitre = ai_result.get("mitre_technique", "none")
+                ai_cialdini = ai_result.get("cialdini_principles", [])
+                ai_lifecycle = ai_result.get("lifecycle_stage", "n/a")
+                ai_suspicious_urls = ai_result.get("suspicious_urls", [])
+                ai_accion = ai_result.get("recommended_action", "allow")
+                ai_explicacion_usuario = ai_result.get("explanation_user", "")
+                ai_explicacion_analista = ai_result.get("explanation_analyst", "")
+
                 logger.info(
-                    "Groq analysis | risk=%s confidence=%.2f",
-                    groq_risk_str, groq_confidence,
+                    "UM Cloud analysis | severity=%s confidence=%.2f category=%s mitre=%s",
+                    ai_severity, ai_confidence, ai_categoria, ai_mitre,
                 )
         except Exception as exc:
-            logger.warning("Groq integration skipped: %s", exc)
+            logger.warning("UM Cloud integration skipped: %s", exc)
+            mensajes_analizados = 1
 
         logger.info(
             "Analysis done | sender=%s score=%.2f risk=%s",
@@ -94,18 +133,37 @@ class PhishingOrchestrator:
 
         try:
             await save_analysis_result(
-                message_id=message_id,
-                conversation_id=conversation_id,
-                sender_id=sender_id,
-                text_preview=text,
-                final_score=final_score,
+                id_mensaje_disparador=message_id,
+                id_conversacion=conversation_id,
+                score_urls=url_result.score,
+                score_texto=text_result.score,
+                score_ia=ai_confidence,
+                score_final=final_score,
                 risk_level=risk_level.value,
-                urls_found=url_result.urls_found,
-                reasons=url_result.reasons + text_result.patterns_matched,
-                urlhaus_checked=urlhaus_checked,
+                categoria_ataque=ai_categoria,
+                tecnica_mitre=ai_mitre,
+                principios_cialdini=ai_cialdini,
+                etapa_lifecycle=ai_lifecycle,
+                urls_sospechosas=ai_suspicious_urls,
+                accion_recomendada=ai_accion,
+                explicacion_usuario=ai_explicacion_usuario,
+                explicacion_analista=ai_explicacion_analista,
+                mensajes_analizados=mensajes_analizados,
             )
         except Exception as exc:
-            logger.error("Supabase save_analysis_result failed: %s", exc)
+            logger.error("SQLite save_analysis_result failed: %s", exc)
+
+        # Observador: análisis holístico si se cumplen los criterios
+        try:
+            await conversation_observer.observe(
+                conversation_id=conversation_id,
+                username=username,
+                total_mensajes=total_mensajes,
+                prev_risk=prev_risk,
+                current_risk=risk_level.value,
+            )
+        except Exception as exc:
+            logger.warning("Conversation observer skipped: %s", exc)
 
         result = AnalysisResult(
             sender_id=sender_id,
@@ -115,8 +173,9 @@ class PhishingOrchestrator:
             url_result=url_result,
             text_result=text_result,
         )
-        if ai_explanation:
-            result.ai_explanation = ai_explanation
-        if ai_recommendation:
-            result.ai_recommendation = ai_recommendation
+        result.ai_explanation = ai_explicacion_usuario
+        result.ai_recommendation = ai_accion
+        result.ai_confidence = ai_confidence
+        result.ai_categoria = ai_categoria
+        result.ai_lifecycle = ai_lifecycle
         return result
