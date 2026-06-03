@@ -82,7 +82,9 @@ async def analyze_conversation(
             max_tokens=2000,
         )
 
-        raw = response.choices[0].message.content.strip()
+        raw = (response.choices[0].message.content or "").strip()
+        if not raw:
+            return {}
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):

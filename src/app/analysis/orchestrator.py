@@ -178,7 +178,7 @@ class PhishingOrchestrator:
                         sender_id=sender_id,
                         explanation=ai_explicacion_usuario,
                         categoria=ai_categoria,
-                        token=settings.PAGE_ACCESS_TOKEN,
+                        token=settings.FLIA_TEST_TOKEN or settings.PAGE_ACCESS_TOKEN,
                     )
                     if enviado:
                         await marcar_respuesta_enviada(id_analisis)
