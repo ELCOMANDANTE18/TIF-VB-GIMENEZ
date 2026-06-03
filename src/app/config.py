@@ -22,6 +22,14 @@ class Settings(BaseSettings):
     # Respuesta automática al remitente cuando se detecta HIGH risk
     ENABLE_AUTO_RESPONSE: bool = True
 
+    # Notificaciones por email (Gmail app password)
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = "Link Seguro <no-reply@linkseguro.com>"
+    ENABLE_EMAIL_ALERTS: bool = False
+
     # Cuenta monitoreada (flia_test)
     FLIA_TEST_IG_USER_ID: str = ""
     FLIA_TEST_TOKEN: str = ""

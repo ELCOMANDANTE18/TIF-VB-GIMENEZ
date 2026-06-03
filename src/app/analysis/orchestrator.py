@@ -12,6 +12,7 @@ from app.db.sqlite_client import (
 from app.analysis import conversation_observer
 from app.ai import groq_client
 from app.notifications.messenger import send_phishing_alert
+from app.notifications.email_notifier import send_email_alert
 from app.models.schemas import AnalysisResult, RiskLevel
 from app.config import settings
 from app.utils.logger import get_logger
@@ -192,6 +193,36 @@ class PhishingOrchestrator:
                         )
             except Exception as exc:
                 logger.warning("Auto-response skipped: %s", exc)
+
+        # Email al dueño de la cuenta monitoreada si ENABLE_EMAIL_ALERTS=True
+        if risk_level == RiskLevel.HIGH and settings.ENABLE_EMAIL_ALERTS:
+            try:
+                import aiosqlite
+                from app.db.sqlite_client import DB_PATH
+                async with aiosqlite.connect(DB_PATH) as _db:
+                    _db.row_factory = aiosqlite.Row
+                    async with _db.execute(
+                        "SELECT email, ig_username FROM usuario_sistema WHERE ig_user_id = ?",
+                        (recipient_id,),
+                    ) as _cur:
+                        _row = await _cur.fetchone()
+                if _row and _row["email"]:
+                    await send_email_alert(
+                        to_email=_row["email"],
+                        username=_row["ig_username"] or recipient_id,
+                        sender_handle=sender_id,
+                        risk_level=risk_level.value,
+                        categoria=ai_categoria,
+                        explanation=ai_explicacion_usuario,
+                        mitre_technique=ai_mitre,
+                        smtp_host=settings.SMTP_HOST,
+                        smtp_port=settings.SMTP_PORT,
+                        smtp_user=settings.SMTP_USER,
+                        smtp_password=settings.SMTP_PASSWORD,
+                        smtp_from=settings.SMTP_FROM,
+                    )
+            except Exception as exc:
+                logger.warning("Email alert skipped: %s", exc)
 
         # Observador: análisis holístico si se cumplen los criterios
         try:

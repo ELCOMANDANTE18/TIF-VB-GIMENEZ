@@ -63,5 +63,6 @@ CREATE TABLE IF NOT EXISTS usuario_sistema (
     ig_user_id      TEXT,
     ig_username     TEXT,
     es_admin        INTEGER DEFAULT 0,
+    email           TEXT DEFAULT '',
     creado_at       DATETIME DEFAULT CURRENT_TIMESTAMP
 );

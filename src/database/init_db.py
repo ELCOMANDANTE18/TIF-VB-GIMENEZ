@@ -17,6 +17,11 @@ def _apply_migrations(conn: sqlite3.Connection) -> None:
             conn.execute(sql)
             print(f"  Migración aplicada: columna '{col}' agregada a conversacion")
 
+    existing_usr = {row[1] for row in conn.execute("PRAGMA table_info(usuario_sistema)")}
+    if "email" not in existing_usr:
+        conn.execute("ALTER TABLE usuario_sistema ADD COLUMN email TEXT DEFAULT ''")
+        print("  Migración aplicada: columna 'email' agregada a usuario_sistema")
+
     existing_an = {row[1] for row in conn.execute("PRAGMA table_info(analisis_conversacion)")}
     nuevas_an = {
         "respuesta_enviada":    "ALTER TABLE analisis_conversacion ADD COLUMN respuesta_enviada INTEGER DEFAULT 0",
