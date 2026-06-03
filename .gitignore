@@ -97,3 +97,17 @@ ngrok-v3-stable-linux-amd64.tgz
 *.tmp
 *.temp
 *.bak
+
+# ── Claude Code ───────────────────────────────────────────────
+CLAUDE.md
+claude.md
+.claude/
+AGENTS.md
+agents.md
+
+# ── Backups de BD ─────────────────────────────────────────────
+data/*.db.bak.*
+src/data/*.db.bak.*
+
+# ── Tokens temporales (glob) ──────────────────────────────────
+/tmp/token*.txt

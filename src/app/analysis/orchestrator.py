@@ -6,9 +6,12 @@ from app.db.sqlite_client import (
     save_analysis_result,
     get_conversation_history,
     get_conversation_info,
+    ya_fue_respondido,
+    marcar_respuesta_enviada,
 )
 from app.analysis import conversation_observer
 from app.ai import groq_client
+from app.notifications.messenger import send_phishing_alert
 from app.models.schemas import AnalysisResult, RiskLevel
 from app.config import settings
 from app.utils.logger import get_logger
@@ -23,6 +26,7 @@ class PhishingOrchestrator:
 
     async def analyze(self, message: dict) -> AnalysisResult:
         sender_id: str = message.get("sender_id", "")
+        recipient_id: str = message.get("recipient_id", "")
         text: str = message.get("text", "")
         message_id: str = message.get("message_id", "")
         conversation_id: str = message.get("conversation_id", "")
@@ -131,8 +135,9 @@ class PhishingOrchestrator:
             sender_id, final_score, risk_level,
         )
 
+        id_analisis = None
         try:
-            await save_analysis_result(
+            id_analisis = await save_analysis_result(
                 id_mensaje_disparador=message_id,
                 id_conversacion=conversation_id,
                 score_urls=url_result.score,
@@ -152,6 +157,41 @@ class PhishingOrchestrator:
             )
         except Exception as exc:
             logger.error("SQLite save_analysis_result failed: %s", exc)
+
+        # Respuesta automática: solo en HIGH risk, si está habilitada y si esta
+        # conversación no fue respondida antes (idempotencia: el atacante no
+        # recibe múltiples alertas). Falla en silencio — nunca corta el flujo.
+        if (
+            risk_level == RiskLevel.HIGH
+            and settings.ENABLE_AUTO_RESPONSE
+            and id_analisis is not None
+        ):
+            try:
+                if await ya_fue_respondido(conversation_id):
+                    logger.info(
+                        "Respuesta automática omitida (ya respondida) | conv=%s",
+                        conversation_id,
+                    )
+                else:
+                    enviado = await send_phishing_alert(
+                        ig_user_id=recipient_id,
+                        sender_id=sender_id,
+                        explanation=ai_explicacion_usuario,
+                        categoria=ai_categoria,
+                        token=settings.PAGE_ACCESS_TOKEN,
+                    )
+                    if enviado:
+                        await marcar_respuesta_enviada(id_analisis)
+                        logger.info(
+                            "Respuesta automática enviada a sender=...%s", sender_id[-4:]
+                        )
+                    else:
+                        logger.warning(
+                            "No se pudo enviar respuesta automática a sender=...%s",
+                            sender_id[-4:],
+                        )
+            except Exception as exc:
+                logger.warning("Auto-response skipped: %s", exc)
 
         # Observador: análisis holístico si se cumplen los criterios
         try:

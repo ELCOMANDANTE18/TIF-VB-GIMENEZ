@@ -28,7 +28,10 @@ async def save_message(
     es_entrante: bool = True,
     participante_username: str = "",
 ) -> str:
-    id_conversacion = _sha256(sender_id + recipient_id)[:16]
+    # Hash bidireccional: ordenamos los IDs para que entrante y saliente
+    # de la misma conversación produzcan el mismo id_conversacion.
+    a, b = sorted([sender_id, recipient_id])
+    id_conversacion = _sha256(a + b)[:16]
     now = datetime.now(timezone.utc).isoformat()
 
     async with aiosqlite.connect(get_db_path()) as db:
@@ -134,9 +137,9 @@ async def save_analysis_result(
     explicacion_usuario: str,
     explicacion_analista: str,
     mensajes_analizados: int,
-) -> None:
+) -> int:
     async with aiosqlite.connect(get_db_path()) as db:
-        await db.execute(
+        cursor = await db.execute(
             """INSERT INTO analisis_conversacion
                (id_conversacion, id_mensaje_disparador, mensajes_analizados,
                 score_urls, score_texto, score_ia, score_final, risk_level,
@@ -168,3 +171,29 @@ async def save_analysis_result(
             (risk_level, id_conversacion),
         )
         await db.commit()
+        return cursor.lastrowid
+
+
+async def marcar_respuesta_enviada(id_analisis: int) -> None:
+    """Marca un análisis como ya respondido automáticamente (idempotencia)."""
+    async with aiosqlite.connect(get_db_path()) as db:
+        await db.execute(
+            """UPDATE analisis_conversacion
+               SET respuesta_enviada = 1,
+                   respuesta_enviada_at = CURRENT_TIMESTAMP
+               WHERE id_analisis = ?""",
+            (id_analisis,),
+        )
+        await db.commit()
+
+
+async def ya_fue_respondido(id_conversacion: str) -> bool:
+    """True si en esta conversación ya se envió una respuesta automática."""
+    async with aiosqlite.connect(get_db_path()) as db:
+        cursor = await db.execute(
+            """SELECT COUNT(*) FROM analisis_conversacion
+               WHERE id_conversacion = ? AND respuesta_enviada = 1""",
+            (id_conversacion,),
+        )
+        row = await cursor.fetchone()
+    return bool(row[0]) if row else False

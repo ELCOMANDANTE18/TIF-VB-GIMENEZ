@@ -1,8 +1,16 @@
 """
-Importa los archivos conv_*.json de data/conversations/ a SQLite.
-Uso: python scripts/import_conversations.py
+Importa los archivos conv_*.json a SQLite.
+
+Uso:
+    python scripts/import_conversations.py              # default data/conversations
+    python scripts/import_conversations.py --dir data/conversations/gimenezbenja2
+
+Si el JSON contiene `app_scoped_id`, se usa ESE como `cuenta_monitoreada`
+(coincide con el ID que Meta envía en los webhooks). Si no, se usa
+participants[0]["id"] (IGSID de Graph API).
 """
 
+import argparse
 import asyncio
 import json
 import sys
@@ -19,7 +27,7 @@ from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-DATA_DIR = Path(__file__).parent.parent / "data" / "conversations"
+DEFAULT_DATA_DIR = Path(__file__).parent.parent / "data" / "conversations"
 
 
 def _parse_timestamp(created_time: str) -> int:
@@ -37,11 +45,19 @@ async def import_file(filepath: Path) -> tuple[int, int]:
         logger.warning("Archivo %s sin 2 participantes, se omite", filepath.name)
         return 0, 0
 
-    page_id = participants[0]["id"]
+    page_id_real = participants[0]["id"]  # IGSID de Graph API
+    app_scoped = data.get("app_scoped_id")  # ID del webhook (si se exportó)
+    page_id = app_scoped or page_id_real    # priorizar el del webhook
     page_username = participants[0].get("username", "")
     external_id = participants[1]["id"]
     external_username = participants[1].get("username", "")
     ig_conversation_id = data.get("conversation_id", "")
+
+    if app_scoped:
+        logger.debug(
+            "Usando app_scoped_id=%s en lugar de IGSID=%s para %s",
+            app_scoped, page_id_real, filepath.name,
+        )
 
     messages = data.get("messages", [])
     imported = 0
@@ -49,9 +65,12 @@ async def import_file(filepath: Path) -> tuple[int, int]:
 
     for msg in messages:
         sender_id = msg["from"]["id"]
-        # Si el remitente es la página monitoreada → mensaje saliente
-        es_entrante = sender_id != page_id
-        recipient_id = external_id if sender_id == page_id else page_id
+        # Si el remitente es la página monitoreada → mensaje saliente.
+        # Comparamos contra IGSID real (que es lo que el JSON trae en from.id).
+        es_entrante = sender_id != page_id_real
+        # recipient_id se guarda como cuenta_monitoreada en la BD →
+        # usamos page_id (app_scoped si está, así matchea con webhooks).
+        recipient_id = external_id if not es_entrante else page_id
         text = msg.get("message", "")
         message_id = msg["id"]
         timestamp = _parse_timestamp(msg["created_time"])
@@ -88,10 +107,18 @@ async def import_file(filepath: Path) -> tuple[int, int]:
 
 
 async def main() -> None:
-    conv_files = sorted(DATA_DIR.glob("conv_*.json"))
+    parser = argparse.ArgumentParser(description="Importa conv_*.json a SQLite")
+    parser.add_argument(
+        "--dir", default=str(DEFAULT_DATA_DIR),
+        help="Directorio con archivos conv_*.json (default: data/conversations)",
+    )
+    args = parser.parse_args()
+    data_dir = Path(args.dir)
+
+    conv_files = sorted(data_dir.glob("conv_*.json"))
 
     if not conv_files:
-        print(f"No se encontraron archivos conv_*.json en {DATA_DIR}")
+        print(f"No se encontraron archivos conv_*.json en {data_dir}")
         return
 
     print(f"Archivos a procesar: {len(conv_files)}\n")

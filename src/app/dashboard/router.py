@@ -2,12 +2,24 @@ import html
 import json
 import sqlite3
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
-from fastapi import APIRouter
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Form, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+
+from app.dashboard.auth import (
+    COOKIE_NAME,
+    SESSION_MAX_AGE,
+    create_session_token,
+    get_current_user,
+    get_usuario_by_username,
+    verify_password,
+)
 
 DB_PATH = Path(__file__).parent.parent.parent / "data" / "phishing_detector.db"
+
+TZ = ZoneInfo("America/Argentina/Mendoza")
 
 router = APIRouter()
 
@@ -23,28 +35,58 @@ def _fmt_ts(ts) -> str:
         return "—"
     if isinstance(ts, (int, float)):
         epoch = ts / 1000 if ts > 9_999_999_999 else ts
-        return datetime.fromtimestamp(epoch, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-    return str(ts)[:19]
+        return datetime.fromtimestamp(epoch, tz=TZ).strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        dt = datetime.fromisoformat(str(ts)[:19])
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(TZ).strftime("%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return str(ts)[:19]
 
 
-def get_dashboard_data() -> dict:
+def get_dashboard_data(ig_user_id: str | None = None) -> dict:
+    """
+    Si ig_user_id es None → ve todas las conversaciones (admin).
+    Si ig_user_id viene → filtra c.cuenta_monitoreada = ig_user_id.
+    """
+    where_clause = "WHERE c.cuenta_monitoreada = ?" if ig_user_id else ""
+    where_counts = "WHERE cuenta_monitoreada = ?" if ig_user_id else ""
+    params: tuple = (ig_user_id,) if ig_user_id else ()
+
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
         cur = conn.execute(
-            "SELECT risk_level_actual, COUNT(*) AS cnt FROM conversacion GROUP BY risk_level_actual"
+            f"SELECT risk_level_actual, COUNT(*) AS cnt FROM conversacion {where_counts} "
+            "GROUP BY risk_level_actual",
+            params,
         )
         risk_counts = {row["risk_level_actual"]: row["cnt"] for row in cur.fetchall()}
 
-        cur = conn.execute("SELECT MAX(analizado_at) AS last FROM analisis_conversacion")
+        if ig_user_id:
+            cur = conn.execute(
+                """SELECT MAX(a.analizado_at) AS last
+                   FROM analisis_conversacion a
+                   JOIN conversacion c ON c.id_conversacion = a.id_conversacion
+                   WHERE c.cuenta_monitoreada = ?""",
+                params,
+            )
+        else:
+            cur = conn.execute("SELECT MAX(analizado_at) AS last FROM analisis_conversacion")
         row = cur.fetchone()
         last_analysis = row["last"] if row and row["last"] else None
 
-        cur = conn.execute("""
+        cur = conn.execute(f"""
             SELECT
                 c.id_conversacion,
                 c.participante_username,
                 c.participante_id,
+                CASE
+                    WHEN c.participante_username IS NOT NULL AND c.participante_username != ''
+                    THEN c.participante_username
+                    ELSE '...' || SUBSTR(CAST(c.participante_id AS TEXT), -8)
+                END AS usuario_display,
                 c.risk_level_actual,
                 c.total_mensajes,
                 c.ultimo_mensaje_at,
@@ -57,6 +99,7 @@ def get_dashboard_data() -> dict:
                 a.explicacion_analista,
                 a.principios_cialdini,
                 a.urls_sospechosas,
+                a.respuesta_enviada,
                 a.analizado_at
             FROM conversacion c
             LEFT JOIN analisis_conversacion a
@@ -66,6 +109,7 @@ def get_dashboard_data() -> dict:
                     FROM analisis_conversacion
                     WHERE id_conversacion = c.id_conversacion
                 )
+            {where_clause}
             ORDER BY
                 CASE c.risk_level_actual
                     WHEN 'HIGH' THEN 1
@@ -73,7 +117,7 @@ def get_dashboard_data() -> dict:
                     ELSE 3
                 END,
                 c.ultimo_mensaje_at DESC
-        """)
+        """, params)
         conversations = [dict(r) for r in cur.fetchall()]
 
         for conv in conversations:
@@ -108,7 +152,7 @@ def get_dashboard_data() -> dict:
 def _build_rows(conversations: list) -> str:
     if not conversations:
         return (
-            '<tr><td colspan="9" style="text-align:center;padding:40px;color:#555;">'
+            '<tr><td colspan="10" style="text-align:center;padding:40px;color:#555;">'
             "No hay análisis registrados todavía</td></tr>"
         )
 
@@ -119,7 +163,12 @@ def _build_rows(conversations: list) -> str:
     rows = []
     for i, conv in enumerate(conversations):
         risk = conv.get("risk_level_actual") or "LOW"
-        username = conv.get("participante_username") or conv.get("participante_id") or "unknown"
+        uname = conv.get("participante_username") or ""
+        pid = str(conv.get("participante_id") or "")
+        if uname:
+            usuario_html = f"@{_e(uname)}"
+        else:
+            usuario_html = f"...{_e(pid[-8:])}"
 
         badge_color = RISK_COLOR.get(risk, "#888")
         emoji = RISK_EMOJI.get(risk, "⚪")
@@ -128,8 +177,20 @@ def _build_rows(conversations: list) -> str:
         score = conv.get("score_final")
         score_str = f"{score:.2f}" if score is not None else "—"
 
+        # Estado de la respuesta automática
+        if conv.get("respuesta_enviada"):
+            alerta_html = (
+                '<span class="alert-badge ok">✅ Alertado</span>'
+            )
+        elif risk == "HIGH":
+            alerta_html = (
+                '<span class="alert-badge pending">⏳ Pendiente</span>'
+            )
+        else:
+            alerta_html = "—"
+
         ultimo_raw = conv.get("ultimo_mensaje_at")
-        ultimo = _e(ultimo_raw[:19] if ultimo_raw else None)
+        ultimo = _e(_fmt_ts(ultimo_raw))
 
         # Cialdini badges
         cialdini_html = " ".join(
@@ -197,27 +258,32 @@ def _build_rows(conversations: list) -> str:
 
         rows.append(
             f'<tr class="conv-row" style="background:{row_bg};" onclick="toggleDetail({i})">'
-            f'<td class="mono">@{_e(username)}</td>'
+            f'<td class="mono">{usuario_html}</td>'
             f'<td><span class="risk-badge" style="background:{badge_color};">{emoji} {risk}</span></td>'
             f'<td class="mono small">{_e(conv.get("categoria_ataque"))}</td>'
             f'<td class="mono small">{_e(conv.get("tecnica_mitre"))}</td>'
             f'<td class="mono center">{score_str}</td>'
             f'<td class="mono small">{_e(conv.get("etapa_lifecycle"))}</td>'
             f'<td class="mono small">{_e(conv.get("accion_recomendada"))}</td>'
+            f'<td class="center">{alerta_html}</td>'
             f'<td class="mono small">{ultimo}</td>'
             f'<td><button class="btn-detail" id="btn-{i}" onclick="event.stopPropagation();toggleDetail({i})">▼ Ver</button></td>'
             "</tr>"
             f'<tr id="detail-{i}" class="detail-row" style="display:none;">'
-            f"<td colspan=\"9\">{detail}</td>"
+            f"<td colspan=\"10\">{detail}</td>"
             "</tr>"
         )
 
     return "\n".join(rows)
 
 
-def render_html(data: dict) -> str:
+def render_html(data: dict, user: dict) -> str:
     rows_html = _build_rows(data["conversations"])
-    last = _e(data["last_analysis"])
+    last = _e(_fmt_ts(data["last_analysis"]))
+    username_html = _e(user.get("username", ""))
+    admin_badge = (
+        '<span class="admin-badge">ADMIN</span>' if user.get("es_admin") else ""
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="es">
@@ -237,6 +303,21 @@ header {{
 h1 {{ font-size:1.35rem; color:#00ff88; letter-spacing:1px; }}
 .refresh-info {{ font-size:0.78rem; color:#555; }}
 .refresh-info span {{ color:#00ccff; }}
+
+.header-right {{ display:flex; align-items:center; gap:14px; }}
+.user-info {{ font-size:0.82rem; color:#bbb; }}
+.user-info b {{ color:#00ccff; }}
+.admin-badge {{
+  display:inline-block; background:#3a0000; border:1px solid #ff4444;
+  color:#ff4444; padding:2px 8px; border-radius:10px;
+  font-size:0.65rem; font-weight:bold; letter-spacing:1px; margin-left:6px;
+}}
+.btn-logout {{
+  background:#1a0a0a; border:1px solid #ff4444; color:#ff4444;
+  padding:5px 12px; border-radius:4px; cursor:pointer;
+  font-size:0.72rem; font-family:inherit; text-decoration:none;
+}}
+.btn-logout:hover {{ background:#ff4444; color:#000; }}
 
 .container {{ padding:24px; max-width:1700px; margin:0 auto; }}
 
@@ -274,6 +355,12 @@ thead th {{
   display:inline-block; padding:3px 10px; border-radius:12px;
   font-size:0.72rem; font-weight:bold; color:#000;
 }}
+.alert-badge {{
+  display:inline-block; padding:3px 9px; border-radius:10px;
+  font-size:0.7rem; font-weight:bold; white-space:nowrap;
+}}
+.alert-badge.ok {{ background:#0a2d12; border:1px solid #44ff88; color:#44ff88; }}
+.alert-badge.pending {{ background:#2d2000; border:1px solid #ffaa00; color:#ffaa00; }}
 .btn-detail {{
   background:#0a1a0a; border:1px solid #00ff88; color:#00ff88;
   padding:4px 11px; border-radius:4px; cursor:pointer;
@@ -319,7 +406,11 @@ thead th {{
 <body>
 <header>
   <h1>&#x1F6E1;&#xFE0F; Link Seguro &mdash; Dashboard de Phishing</h1>
-  <span class="refresh-info">Próxima actualización en <span id="cd">30</span>s</span>
+  <div class="header-right">
+    <span class="refresh-info">Próxima actualización en <span id="cd">30</span>s</span>
+    <span class="user-info">Bienvenido, <b>@{username_html}</b>{admin_badge}</span>
+    <a href="/logout" class="btn-logout">Cerrar sesión</a>
+  </div>
 </header>
 <div class="container">
 
@@ -343,7 +434,7 @@ thead th {{
     <div class="card">
       <div class="card-label">Último análisis</div>
       <div class="card-value ts">{last}</div>
-      <div class="card-sub">analizado_at (UTC)</div>
+      <div class="card-sub">analizado_at (GMT-3 Mendoza)</div>
     </div>
   </div>
 
@@ -358,6 +449,7 @@ thead th {{
           <th>Score</th>
           <th>Lifecycle</th>
           <th>Acción</th>
+          <th>Alerta</th>
           <th>Último mensaje</th>
           <th>Detalle</th>
         </tr>
@@ -396,7 +488,120 @@ function toggleDetail(i) {{
 </html>"""
 
 
+def _render_login(error: str = "") -> str:
+    error_html = (
+        f'<div class="login-error">{_e(error)}</div>' if error else ""
+    )
+    return f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Link Seguro — Login</title>
+<style>
+* {{ margin:0; padding:0; box-sizing:border-box; }}
+body {{
+  background:#0f0f0f; color:#e0e0e0;
+  font-family:'Courier New',Courier,monospace;
+  min-height:100vh; display:flex; align-items:center; justify-content:center;
+}}
+.login-box {{
+  background:#131313; border:1px solid #232323; border-radius:8px;
+  padding:38px 34px; width:100%; max-width:380px;
+}}
+.login-title {{
+  color:#00ff88; font-size:1.25rem; letter-spacing:1px;
+  margin-bottom:6px; text-align:center;
+}}
+.login-sub {{
+  color:#555; font-size:0.78rem; text-align:center; margin-bottom:26px;
+}}
+.field {{ margin-bottom:16px; }}
+.field label {{
+  display:block; font-size:0.7rem; color:#666;
+  text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;
+}}
+.field input {{
+  width:100%; padding:10px 12px; background:#0a0a0a;
+  border:1px solid #2a2a2a; border-radius:4px;
+  color:#e0e0e0; font-family:inherit; font-size:0.88rem;
+}}
+.field input:focus {{ outline:none; border-color:#00ff88; }}
+.btn-submit {{
+  width:100%; padding:11px; margin-top:8px;
+  background:#0a1a0a; border:1px solid #00ff88; color:#00ff88;
+  border-radius:4px; cursor:pointer; font-family:inherit;
+  font-size:0.88rem; letter-spacing:1px;
+}}
+.btn-submit:hover {{ background:#00ff88; color:#000; }}
+.login-error {{
+  background:#2d0000; border:1px solid #ff4444; color:#ff4444;
+  padding:9px 12px; border-radius:4px; font-size:0.78rem;
+  margin-bottom:16px; text-align:center;
+}}
+</style>
+</head>
+<body>
+  <form class="login-box" method="post" action="/login">
+    <div class="login-title">&#x1F6E1;&#xFE0F; Link Seguro</div>
+    <div class="login-sub">Dashboard de phishing</div>
+    {error_html}
+    <div class="field">
+      <label for="username">Usuario</label>
+      <input id="username" name="username" type="text" required autofocus autocomplete="username">
+    </div>
+    <div class="field">
+      <label for="password">Contraseña</label>
+      <input id="password" name="password" type="password" required autocomplete="current-password">
+    </div>
+    <button type="submit" class="btn-submit">Ingresar</button>
+  </form>
+</body>
+</html>"""
+
+
+@router.get("/login", response_class=HTMLResponse)
+def login_form(request: Request):
+    if get_current_user(request):
+        return RedirectResponse(url="/dashboard", status_code=303)
+    return HTMLResponse(_render_login())
+
+
+@router.post("/login")
+def login_submit(
+    username: str = Form(...),
+    password: str = Form(...),
+):
+    user = get_usuario_by_username(username)
+    if not user or not verify_password(password, user["password_hash"]):
+        return HTMLResponse(
+            _render_login("Usuario o contraseña incorrectos"),
+            status_code=401,
+        )
+    token = create_session_token(user)
+    response = RedirectResponse(url="/dashboard", status_code=303)
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=token,
+        max_age=SESSION_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+    )
+    return response
+
+
+@router.get("/logout")
+def logout():
+    response = RedirectResponse(url="/login", status_code=303)
+    response.delete_cookie(COOKIE_NAME)
+    return response
+
+
 @router.get("/dashboard", response_class=HTMLResponse)
-def dashboard():
-    data = get_dashboard_data()
-    return render_html(data)
+def dashboard(request: Request):
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+    ig_filter = None if user.get("es_admin") else user.get("ig_user_id")
+    data = get_dashboard_data(ig_user_id=ig_filter)
+    return render_html(data, user)

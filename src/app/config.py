@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     URL_WEIGHT: float = 0.6
     TEXT_WEIGHT: float = 0.4
 
+    # Respuesta automática al remitente cuando se detecta HIGH risk
+    ENABLE_AUTO_RESPONSE: bool = True
+
     # Cuenta monitoreada (flia_test)
     FLIA_TEST_IG_USER_ID: str = ""
     FLIA_TEST_TOKEN: str = ""
@@ -27,6 +30,9 @@ class Settings(BaseSettings):
     UM_API_KEY: str = ""
     UM_BASE_URL: str = "https://ai.cloud.um.edu.ar/api/v1"
     UM_MODEL: str = "gemma4-26b"
+
+    # Sesiones del dashboard (itsdangerous)
+    SESSION_SECRET: str = "link_seguro_secret_2024"
 
     # Supabase — DESCARTADO por decisión del tutor
     # SUPABASE_URL: str = ""

@@ -42,6 +42,8 @@ CREATE TABLE IF NOT EXISTS analisis_conversacion (
     accion_recomendada      TEXT DEFAULT 'allow',
     explicacion_usuario     TEXT,
     explicacion_analista    TEXT,
+    respuesta_enviada       INTEGER DEFAULT 0,
+    respuesta_enviada_at    DATETIME,
     analizado_at            DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -53,3 +55,13 @@ CREATE INDEX IF NOT EXISTS idx_analisis_risk
     ON analisis_conversacion(risk_level);
 CREATE INDEX IF NOT EXISTS idx_conversacion_risk
     ON conversacion(risk_level_actual);
+
+CREATE TABLE IF NOT EXISTS usuario_sistema (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    username        TEXT UNIQUE NOT NULL,
+    password_hash   TEXT NOT NULL,
+    ig_user_id      TEXT,
+    ig_username     TEXT,
+    es_admin        INTEGER DEFAULT 0,
+    creado_at       DATETIME DEFAULT CURRENT_TIMESTAMP
+);

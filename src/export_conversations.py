@@ -1,17 +1,32 @@
 """
 export_conversations.py
 =======================
-Exporta todas las conversaciones e historial de mensajes de la cuenta
-de Instagram monitoreada (flia_test) a archivos JSON locales.
+Exporta todas las conversaciones e historial de mensajes de una cuenta
+de Instagram a archivos JSON locales.
 
 Uso:
+    # Default: usa FLIA_TEST_TOKEN + FLIA_TEST_IG_USER_ID del .env
     python export_conversations.py
 
+    # Otra cuenta — token y IGSID por flag
+    python export_conversations.py \\
+        --token "$Personal_TEST_TOKEN" \\
+        --ig-user-id 26555696997406448 \\
+        --app-scoped-id 17841407634191670 \\
+        --output-dir data/conversations/gimenezbenja2
+
+    # O por env var
+    EXPORT_TOKEN=xxx EXPORT_IG_USER_ID=123 python export_conversations.py
+
+`--app-scoped-id` (opcional): ID que Meta usa en webhooks para esta cuenta.
+Si se provee, se guarda en cada JSON para que el import use ese ID como
+`cuenta_monitoreada` (matchea con los webhooks reales).
+
 Requiere:
-    - .env con FLIA_TEST_TOKEN y FLIA_TEST_IG_USER_ID configurados
     - pip install httpx python-dotenv
 """
 
+import argparse
 import json
 import os
 import time
@@ -23,16 +38,49 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ── Configuración ─────────────────────────────────────────────
-TOKEN = os.getenv("FLIA_TEST_TOKEN") or os.getenv("PAGE_ACCESS_TOKEN")
-IG_USER_ID = os.getenv("FLIA_TEST_IG_USER_ID")
+
+def _parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="Export Instagram DMs to JSON")
+    p.add_argument(
+        "--token",
+        default=os.getenv("EXPORT_TOKEN")
+        or os.getenv("FLIA_TEST_TOKEN")
+        or os.getenv("PAGE_ACCESS_TOKEN"),
+        help="Instagram access token (default: EXPORT_TOKEN | FLIA_TEST_TOKEN | PAGE_ACCESS_TOKEN)",
+    )
+    p.add_argument(
+        "--ig-user-id",
+        default=os.getenv("EXPORT_IG_USER_ID") or os.getenv("FLIA_TEST_IG_USER_ID"),
+        help="IGSID (de Graph API /me) — default: EXPORT_IG_USER_ID | FLIA_TEST_IG_USER_ID",
+    )
+    p.add_argument(
+        "--app-scoped-id",
+        default=os.getenv("EXPORT_APP_SCOPED_ID"),
+        help="ID que Meta usa en webhooks (opcional). Se guarda en los JSON.",
+    )
+    p.add_argument(
+        "--output-dir",
+        default=os.getenv("EXPORT_OUTPUT_DIR", "data/conversations"),
+        help="Directorio donde guardar los JSON (default: data/conversations)",
+    )
+    return p.parse_args()
+
+
+ARGS = _parse_args()
+
+TOKEN = ARGS.token
+IG_USER_ID = ARGS.ig_user_id
+APP_SCOPED_ID = ARGS.app_scoped_id
 API_VERSION = "v25.0"
 BASE_URL = f"https://graph.instagram.com/{API_VERSION}"
-OUTPUT_DIR = Path("data/conversations")
+OUTPUT_DIR = Path(ARGS.output_dir)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 if not TOKEN or not IG_USER_ID:
-    raise ValueError("Faltan FLIA_TEST_TOKEN y FLIA_TEST_IG_USER_ID en el .env")
+    raise ValueError(
+        "Faltan token y/o IGSID. Pasalos con --token y --ig-user-id, "
+        "o configurá FLIA_TEST_TOKEN/FLIA_TEST_IG_USER_ID en el .env."
+    )
 
 
 def get_conversations() -> list[dict]:
@@ -119,6 +167,7 @@ def export_all():
     full_export = {
         "exported_at": datetime.now(timezone.utc).isoformat(),
         "ig_user_id": IG_USER_ID,
+        "app_scoped_id": APP_SCOPED_ID,
         "total_conversations": len(conversations),
         "conversations": [],
     }
@@ -137,6 +186,8 @@ def export_all():
 
         conv_data = {
             "conversation_id": conv_id,
+            "ig_user_id": IG_USER_ID,
+            "app_scoped_id": APP_SCOPED_ID,
             "participants": conv.get("participants", {}).get("data", []),
             "updated_time": conv.get("updated_time"),
             "total_messages": len(messages),
