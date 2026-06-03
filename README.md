@@ -1,61 +1,122 @@
-# Proyecto Link Seguro - TIF III
+# 🛡️ Link Seguro
+### Sistema de detección de phishing en Instagram DMs
+**Trabajo Integrador Final — Ingeniería en Sistemas**  
+Universidad de Mendoza — 2026  
+Autor: Victor Benjamín Giménez
 
-### Este es el repositorio oficial de mi Trabajo Integrador Final. Acá voy a ir subiendo todo lo que vaya haciendo durante el semestre para que esté todo en un mismo lugar.
+---
 
+## ¿Qué hace?
 
-# Link Seguro — Detección de Phishing en Instagram DMs
+Link Seguro monitorea los mensajes directos (DMs) de Instagram 
+en tiempo real y detecta intentos de phishing mediante un 
+pipeline de análisis de 4 capas.
 
-## Requisitos
-- Python 3.10+
-- ngrok
+---
 
-## Instalación
+## Arquitectura
 
-```bash
-# 1. Clonar el repo
-git clone <url-del-repo>
-cd TIF-VB-GIMENEZ/src
-
-# 2. Setup automático
-bash setup.sh
-
-# 3. Completar credenciales
-nano .env
+```
+Instagram DM
+     │
+     ▼
+Meta Graph API (Webhook)
+     │
+     ▼
+FastAPI + Uvicorn
+     │
+     ├──► URLAnalyzer      (PhishTank 29k dominios + URLhaus + Regex)
+     ├──► TextAnalyzer     (Patrones de ingeniería social)
+     └──► UM Cloud AI      (gemma4-26b — MITRE ATT&CK + APWG + Cialdini)
+               │
+               ▼
+         SQLite (local)
+               │
+               ▼
+    Dashboard Web /dashboard
+    (login multiusuario, alertas, detalle por conversación)
 ```
 
-## Uso
+---
 
-**Terminal 1 — Servidor:**
+## Stack tecnológico
+
+| Componente | Tecnología |
+|---|---|
+| Backend | Python 3.14 + FastAPI |
+| IA Generativa | gemma4-26b via UM Cloud |
+| Detección heurística | PhishTank + URLhaus + Regex |
+| Base de datos | SQLite + aiosqlite |
+| Autenticación | bcrypt + itsdangerous |
+| Túnel público | ngrok |
+| API externa | Meta Graph API v25.0 |
+
+---
+
+## Estructura del proyecto
+
+```
+TIF-VB-GIMENEZ/
+├── src/
+│   ├── app/
+│   │   ├── ai/              # Cliente UM Cloud + system prompt
+│   │   ├── analysis/        # URLAnalyzer, TextAnalyzer, Orchestrator
+│   │   ├── dashboard/       # Dashboard web + autenticación
+│   │   ├── db/              # Cliente SQLite
+│   │   ├── notifications/   # Módulo de alertas Instagram
+│   │   └── webhook/         # Endpoints Meta Webhook
+│   ├── database/            # Schema SQL + script de inicialización
+│   ├── data/                # BD SQLite local (no se sube al repo)
+│   ├── docs/                # Documentación técnica
+│   ├── scripts/             # Scripts de setup y mantenimiento
+│   └── tests/               # Dataset de evaluación
+├── .gitignore
+└── README.md
+```
+
+---
+
+## Instalación rápida
+
 ```bash
-source .venv/bin/activate
+cd src
+bash setup.sh
+nano .env          # completar credenciales
+python database/init_db.py
+python scripts/setup_usuarios.py
 uvicorn app.main:app --reload --port 8000
 ```
 
-**Terminal 2 — Túnel público:**
-```bash
-ngrok http 8000
-```
+Ver: http://localhost:8000/dashboard  
+Login: admin / admin123
 
-**Verificar que funciona:**
-```
-http://localhost:8000/health
-http://localhost:8000/docs
-http://127.0.0.1:4040  ← inspector ngrok
-```
+---
 
-## Registrar Webhook en Meta
+## Documentación técnica
 
-1. Ir a `developers.facebook.com` → `api_tester` → Instagram → Configuración de la API
-2. Pegar la URL de ngrok + `/webhook`
-3. Pegar el `META_VERIFY_TOKEN` del `.env`
-4. Click en Guardar
+| Documento | Contenido |
+|---|---|
+| docs/README_TECNICO.md | Arquitectura completa |
+| docs/PROMPT_SUSTENTO.md | Sustento académico de la IA |
+| docs/BASE_DE_DATOS.md | Modelo de datos SQLite |
+| docs/DECISIONES_ARQUITECTURA.md | Registro de decisiones (ADRs) |
+| docs/INSTALACION.md | Guía paso a paso |
 
-## Variables de entorno necesarias (.env)
+---
 
-```env
-FACEBOOK_PAGE_ID=
-META_APP_ID=
-META_APP_SECRET=
-META_VERIFY_TOKEN=
-PAGE_ACCESS_TOKEN=
-```
+## Usuarios de demo
+
+| Usuario | Contraseña | Rol |
+|---|---|---|
+| admin | admin123 | Ve todo |
+| flia_test | link2024 | Ve sus conversaciones |
+| benja | link2024 | Ve sus conversaciones |
+| hernesto | link2024 | Ve sus conversaciones |
+
+---
+
+## Estándares aplicados
+
+- **MITRE ATT&CK T1566** — Clasificación de técnicas de phishing
+- **APWG eCrime Reports** — Taxonomía de ataques en redes sociales  
+- **Principios de Cialdini** — Mecanismos psicológicos de ingeniería social

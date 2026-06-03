@@ -1,0 +1,81 @@
+LINK SEGURO — Estado del proyecto
+===================================
+Fecha: 2026-06-03
+Autor: Victor Benjamin Gimenez
+Materia: TIF-3 / Universidad de Mendoza
+
+
+VERSIÓN ACTUAL: v0.3.0
+-----------------------
+El sistema está operativo en modo desarrollo local con túnel ngrok.
+Recibe mensajes de Instagram vía Meta Webhook, los analiza y muestra
+los resultados en un dashboard web con login multiusuario.
+
+
+LO QUE ESTÁ CONSTRUIDO
+-----------------------
+[v0.1] Integración con Meta Webhook + persistencia en Supabase.
+[v0.2] Migración a SQLite local. Pipeline de análisis completo:
+       URL Analyzer + Text Analyzer + IA UM Cloud (gemma4-26b).
+       Prompt ajustado a norma académica. Fix de id_conversacion
+       bidireccional (sha256 del par sender/recipient).
+[v0.3] Dashboard web con login multiusuario (bcrypt + cookies firmadas).
+       Auth modular (auth.py). Módulo de notificaciones (messenger.py).
+       Scripts de setup de usuarios y migración de IDs.
+       Documentación técnica completa en src/docs/.
+
+
+ARQUITECTURA ACTUAL (resumida)
+-------------------------------
+  Meta Instagram  →  POST /webhook
+                          │
+                    BackgroundTask
+                          │
+               PhishingOrchestrator.analyze()
+                 ├── URLAnalyzer  (sync, heurístico)
+                 ├── TextAnalyzer (sync, heurístico)
+                 ├── URLhaus API  (async, confirmación online)
+                 └── UM Cloud AI  (gemma4-26b, clasificación MITRE)
+                          │
+                     SQLite (aiosqlite)
+                          │
+                   Dashboard /dashboard  (HTML inline, auth bcrypt)
+
+
+PRÓXIMOS PASOS
+--------------
+[ ] Conectar el módulo de notificaciones: enviar alerta automática
+    al usuario de Instagram cuando se detecta riesgo ALTO.
+
+[ ] Activar verificación HMAC de firma Meta en el webhook
+    (validator.py ya está implementado, falta wirearlo en router.py).
+
+[ ] Evaluar el pipeline con el dataset real:
+    tests/dataset_evaluacion.json (8 casos etiquetados).
+    Registrar precision/recall para el informe TIF.
+
+[ ] Agregar endpoint de exportación de conversaciones al dashboard
+    (export_conversations.py ya existe como script CLI).
+
+[ ] Redactar informe académico final apoyándose en:
+    src/docs/DECISIONES_ARQUITECTURA.md
+    src/docs/PROMPT_SUSTENTO.md
+    src/docs/BASE_DE_DATOS.md
+
+[ ] Revisar y limpiar archivos muertos:
+    app/utils.py, app/models.py (reemplazados por las versiones package).
+
+
+CREDENCIALES DE DEMO (solo entorno local)
+------------------------------------------
+  admin      / admin123   (ve todo, badge ADMIN)
+  flia_test  / link2024
+  benja      / link2024
+  hernesto   / link2024
+
+
+NOTAS
+-----
+- Supabase está descartado (decisión tutor 2026-05-08). Solo SQLite.
+- CLAUDE.md y AGENTS.md están ignorados por .gitignore (no van al repo).
+- Cambiar SESSION_SECRET antes de cualquier despliegue real.
