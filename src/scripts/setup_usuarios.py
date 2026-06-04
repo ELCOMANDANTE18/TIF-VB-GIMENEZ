@@ -36,7 +36,7 @@ USUARIOS = [
         "ig_user_id": None,
         "ig_username": None,
         "es_admin": 1,
-        "email": "admin@linkseguro.local",
+        "email": "linkseguro.tif@gmail.com",
     },
     {
         "username": "flia_test",
@@ -44,7 +44,7 @@ USUARIOS = [
         "ig_user_id": "17841428323852479",
         "ig_username": "fliagimenez2026",
         "es_admin": 0,
-        "email": "flia@linkseguro.local",
+        "email": "fliagimenez2026@gmail.com",
     },
     {
         "username": "hernesto",
@@ -52,7 +52,7 @@ USUARIOS = [
         "ig_user_id": "955769153705305",
         "ig_username": "hernestolopez2026",
         "es_admin": 0,
-        "email": "hernesto@linkseguro.local",
+        "email": "hernestolopez2026@gmail.com",
     },
     {
         "username": "benja",
@@ -60,7 +60,7 @@ USUARIOS = [
         "ig_user_id": "17841407634191670",
         "ig_username": "gimenezbenja2",
         "es_admin": 0,
-        "email": "benja@linkseguro.local",
+        "email": "gimenezbenja2@gmail.com",
     },
 ]
 
@@ -92,7 +92,7 @@ def main() -> None:
             )
             # Actualizar email en usuarios ya existentes
             conn.execute(
-                "UPDATE usuario_sistema SET email = ? WHERE username = ? AND (email IS NULL OR email = '')",
+                "UPDATE usuario_sistema SET email = ? WHERE username = ?",
                 (u.get("email", ""), u["username"]),
             )
         conn.commit()

@@ -1,0 +1,91 @@
+LINK SEGURO — Próximos pasos posibles
+======================================
+Fecha: 2026-06-03
+
+
+FUNCIONALIDADES PENDIENTES (priorizadas)
+-----------------------------------------
+
+=== IMPACTO ALTO — directo al informe académico ===
+
+[A] EVALUACIÓN DEL DATASET
+    Archivo: tests/dataset_evaluacion.json (8 casos etiquetados)
+    → Correr cada caso por el pipeline heurístico (URLAnalyzer + TextAnalyzer).
+    → Calcular: precision, recall, F1-score, matriz de confusión.
+    → Generar: scripts/evaluar_dataset.py que imprime la tabla de resultados.
+    → Usar la salida como evidencia cuantitativa en el informe TIF.
+    Notas:
+      - Sin IA (UM Cloud caído) el score máximo es ~0.50 (MEDIUM).
+      - Los 8 casos son HIGH → el pipeline debería clasificarlos al menos MEDIUM.
+      - Documentar la limitación en el informe.
+
+[B] PÁGINA DE ESTADÍSTICAS EN EL DASHBOARD
+    Ruta: /dashboard/stats
+    → Distribución de ataques por categoría (bar chart ASCII o JS).
+    → Frecuencia de principios de Cialdini detectados.
+    → Timeline de detecciones por fecha.
+    → Técnicas MITRE más frecuentes.
+    Implementación: nueva sección en router.py, query GROUP BY sobre la BD.
+    Valor: capturas de pantalla directas para el informe + prueba de concepto.
+
+=== IMPACTO MEDIO — mejoran el producto ===
+
+[C] MARCAR CONVERSACIÓN: FALSO POSITIVO / CONFIRMADO
+    → Botón en el detalle de cada conversación:
+        ✅ Confirmar phishing   (es_verdadero_positivo = 1)
+        ❌ Falso positivo       (es_verdadero_positivo = 0)
+    → Columna nueva en analisis_conversacion: revision_analista (NULL/0/1)
+    → Permite calcular accuracy real versus juicio humano.
+    → Clave para la evaluación del dataset en el informe.
+
+[D] HISTORIAL DE ACCIONES MANUALES (audit log)
+    → Tabla nueva: accion_manual (id, username, tipo, id_conversacion, timestamp)
+    → Registrar: quién notificó, quién respondió DM, quién marcó FP.
+    → Visible en el dashboard del admin como tabla de auditoría.
+    → Tipos de acción: 'notificar_email' | 'responder_dm' | 'marcar_fp' | 'confirmar'
+
+[E] EXPORTAR ANÁLISIS A CSV
+    → Botón "Exportar CSV" en el dashboard (admin).
+    → Descarga: id_conversacion, participante, risk_level, score, categoría,
+      técnica MITRE, principios Cialdini, timestamp.
+    → Endpoint: GET /dashboard/exportar.csv
+    → Útil para adjuntar datos al informe académico.
+
+=== IMPACTO BAJO — pulido final ===
+
+[F] PERFIL DE USUARIO Y CAMBIO DE CONTRASEÑA
+    → Formulario en /dashboard/perfil para:
+        - Ver datos propios (username, email, ig_username).
+        - Cambiar contraseña (verificar actual, nueva, confirmación).
+        - Editar email propio.
+
+[G] WIREAR VERIFICACIÓN HMAC DEL WEBHOOK
+    → app/webhook/validator.py ya implementado.
+    → Falta: agregar Dependency en router.py del webhook.
+    → Solo relevante para producción (Meta firma cada POST con HMAC-SHA256).
+
+[H] PÁGINA DE AYUDA EN EL DASHBOARD
+    → Ruta: /dashboard/ayuda
+    → Explicar al usuario qué significa cada campo:
+        MITRE ATT&CK, principios de Cialdini, lifecycle del ataque,
+        score heurístico, badges de riesgo.
+
+
+ESTADO DE LO YA CONSTRUIDO (v0.4 + mejoras de sesión)
+------------------------------------------------------
+✅ Webhook Meta + análisis pipeline completo
+✅ URLAnalyzer (PhishTank 29k) + TextAnalyzer (patrones sociales)
+✅ SQLite (aiosqlite) — sin ORM
+✅ Dashboard multiusuario (bcrypt + cookies firmadas)
+✅ Login por username O email
+✅ Filtros por cuenta en vista admin
+✅ Respuesta automática DM (Instagram Graph API)
+✅ Notificaciones email HTML (Gmail SMTP):
+     - Bienvenida al sistema
+     - Alerta HIGH risk (phishing de credenciales)
+     - Alerta MEDIUM risk (scam de premios)
+✅ Botones de acción manual en el dashboard:
+     - 💬 Responder DM (usuario y admin)
+     - 📧 Notificar usuario (solo admin)
+✅ Emails reales de todos los usuarios en BD
+❌ UM Cloud AI (gemma4-26b) — caído, pendiente del servidor UM

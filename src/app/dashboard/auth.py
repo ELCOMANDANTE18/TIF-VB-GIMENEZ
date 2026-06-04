@@ -58,8 +58,8 @@ def get_usuario_by_username(username: str) -> dict | None:
     try:
         cur = conn.execute(
             "SELECT id, username, password_hash, ig_user_id, ig_username, es_admin "
-            "FROM usuario_sistema WHERE username = ?",
-            (username,),
+            "FROM usuario_sistema WHERE username = ? OR email = ?",
+            (username, username),
         )
         row = cur.fetchone()
     finally:

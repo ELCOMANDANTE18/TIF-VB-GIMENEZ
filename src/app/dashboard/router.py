@@ -5,9 +5,12 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from pathlib import Path
 
-from fastapi import APIRouter, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Form, Query, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
+from app.config import settings
+from app.notifications.email_notifier import send_email_alert
+from app.notifications.messenger import send_phishing_alert
 from app.dashboard.auth import (
     COOKIE_NAME,
     SESSION_MAX_AGE,
@@ -149,7 +152,79 @@ def get_dashboard_data(ig_user_id: str | None = None) -> dict:
         conn.close()
 
 
-def _build_rows(conversations: list) -> str:
+def get_all_ig_usuarios() -> list[dict]:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        cur = conn.execute(
+            "SELECT ig_user_id, ig_username, username FROM usuario_sistema "
+            "WHERE ig_user_id IS NOT NULL ORDER BY username"
+        )
+        return [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def get_conversacion_para_accion(id_conversacion: str) -> dict | None:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        cur = conn.execute(
+            """SELECT
+                c.id_conversacion,
+                c.cuenta_monitoreada,
+                c.participante_id,
+                c.participante_username,
+                c.risk_level_actual,
+                a.id_analisis,
+                a.categoria_ataque,
+                a.tecnica_mitre,
+                a.explicacion_usuario,
+                u.email      AS owner_email,
+                u.ig_username AS owner_ig_username,
+                u.username    AS owner_username
+            FROM conversacion c
+            LEFT JOIN analisis_conversacion a
+                ON c.id_conversacion = a.id_conversacion
+                AND a.id_analisis = (
+                    SELECT MAX(id_analisis) FROM analisis_conversacion
+                    WHERE id_conversacion = c.id_conversacion
+                )
+            LEFT JOIN usuario_sistema u ON u.ig_user_id = c.cuenta_monitoreada
+            WHERE c.id_conversacion = ?""",
+            (id_conversacion,),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def _get_token_for_account(ig_user_id: str) -> str:
+    if ig_user_id == settings.FLIA_TEST_IG_USER_ID:
+        return settings.FLIA_TEST_TOKEN
+    return ""
+
+
+def _marcar_respondido_sync(id_conversacion: str) -> None:
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        conn.execute(
+            """UPDATE analisis_conversacion
+               SET respuesta_enviada = 1, respuesta_enviada_at = CURRENT_TIMESTAMP
+               WHERE id_conversacion = ?
+               AND id_analisis = (
+                   SELECT MAX(id_analisis) FROM analisis_conversacion
+                   WHERE id_conversacion = ?
+               )""",
+            (id_conversacion, id_conversacion),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _build_rows(conversations: list, is_admin: bool = False) -> str:
     if not conversations:
         return (
             '<tr><td colspan="10" style="text-align:center;padding:40px;color:#555;">'
@@ -231,6 +306,29 @@ def _build_rows(conversations: list) -> str:
             )
         msgs_html = "".join(msg_rows) or "— sin mensajes —"
 
+        conv_id_esc = html.escape(conv.get("id_conversacion", ""))
+        already_responded = bool(conv.get("respuesta_enviada"))
+        if already_responded:
+            responder_btn = (
+                '<button class="btn-action" disabled>✅ DM ya enviado</button>'
+            )
+        else:
+            responder_btn = (
+                f'<button class="btn-action btn-responder" data-id="{conv_id_esc}" '
+                f'onclick="accionResponder(this)">💬 Responder DM</button>'
+            )
+        notificar_btn = (
+            f'<button class="btn-action btn-notificar" data-id="{conv_id_esc}" '
+            f'onclick="accionNotificar(this)">📧 Notificar usuario</button>'
+        ) if is_admin else ""
+
+        acciones_html = (
+            '<div class="detail-block full-width actions-block">'
+            '<div class="detail-label">Acciones manuales</div>'
+            '<div class="action-btns">' + responder_btn + notificar_btn + '</div>'
+            '</div>'
+        )
+
         detail = (
             '<div class="detail-section">'
             '<div class="detail-block">'
@@ -253,6 +351,7 @@ def _build_rows(conversations: list) -> str:
             '<div class="detail-label">Últimos 10 mensajes</div>'
             f'<div class="msg-list">{msgs_html}</div>'
             "</div>"
+            f'{acciones_html}'
             "</div>"
         )
 
@@ -277,13 +376,36 @@ def _build_rows(conversations: list) -> str:
     return "\n".join(rows)
 
 
-def render_html(data: dict, user: dict) -> str:
-    rows_html = _build_rows(data["conversations"])
+def render_html(
+    data: dict,
+    user: dict,
+    usuarios_list: list | None = None,
+    filtro_activo: str | None = None,
+) -> str:
+    rows_html = _build_rows(data["conversations"], is_admin=bool(user.get("es_admin")))
     last = _e(_fmt_ts(data["last_analysis"]))
     username_html = _e(user.get("username", ""))
     admin_badge = (
         '<span class="admin-badge">ADMIN</span>' if user.get("es_admin") else ""
     )
+
+    filter_bar_html = ""
+    if user.get("es_admin") and usuarios_list:
+        all_active = " active" if not filtro_activo else ""
+        btns = [f'<a href="/dashboard" class="filter-btn{all_active}">Todas las cuentas</a>']
+        for u in usuarios_list:
+            ig = u.get("ig_username") or ""
+            if not ig:
+                continue
+            act = " active" if ig == filtro_activo else ""
+            btns.append(
+                f'<a href="/dashboard?filtro={html.escape(ig)}" class="filter-btn{act}">@{html.escape(ig)}</a>'
+            )
+        filter_bar_html = (
+            '<div class="filter-bar"><span class="filter-label">Filtrar por cuenta:</span>'
+            + "".join(btns)
+            + "</div>"
+        )
 
     return f"""<!DOCTYPE html>
 <html lang="es">
@@ -401,6 +523,33 @@ thead th {{
 .msg-dir    {{ color:#333; }}
 .msg-sender {{ color:#00ccff; min-width:80px; }}
 .msg-text   {{ color:#bbb; flex:1; word-break:break-all; }}
+
+/* ── Action buttons ── */
+.actions-block {{ border-color:#1a2a1a; background:#0a0f0a; }}
+.action-btns {{ display:flex; gap:10px; flex-wrap:wrap; padding-top:4px; }}
+.btn-action {{
+  padding:8px 20px; border-radius:4px; cursor:pointer; border:1px solid;
+  font-size:0.78rem; font-family:'Courier New',Courier,monospace;
+  font-weight:bold; transition:all 0.15s;
+}}
+.btn-action:disabled {{ opacity:0.4; cursor:not-allowed; }}
+.btn-responder {{ background:#0a1a0a; border-color:#00ff88; color:#00ff88; }}
+.btn-responder:hover:not(:disabled) {{ background:#00ff88; color:#000; }}
+.btn-notificar {{ background:#0a0a1a; border-color:#00ccff; color:#00ccff; }}
+.btn-notificar:hover:not(:disabled) {{ background:#00ccff; color:#000; }}
+.btn-action.success {{ border-color:#44ff88 !important; color:#44ff88 !important; background:#001a00 !important; }}
+.btn-action.error   {{ border-color:#ff4444 !important; color:#ff4444 !important; background:#1a0000 !important; }}
+
+/* ── Filter bar ── */
+.filter-bar {{ display:flex; gap:8px; align-items:center; margin-bottom:20px; flex-wrap:wrap; }}
+.filter-label {{ font-size:0.7rem; color:#555; text-transform:uppercase; letter-spacing:1px; margin-right:4px; }}
+.filter-btn {{
+  padding:5px 14px; border-radius:14px; border:1px solid #2a2a2a;
+  color:#666; font-size:0.76rem; text-decoration:none;
+  font-family:'Courier New',Courier,monospace; background:#131313;
+}}
+.filter-btn:hover {{ border-color:#00ccff; color:#00ccff; }}
+.filter-btn.active {{ border-color:#00ff88; color:#00ff88; background:#0a1a0a; font-weight:bold; }}
 </style>
 </head>
 <body>
@@ -438,6 +587,7 @@ thead th {{
     </div>
   </div>
 
+  {filter_bar_html}
   <div class="table-wrapper">
     <table>
       <thead>
@@ -482,6 +632,48 @@ function toggleDetail(i) {{
     row.style.display = 'none';
     btn.textContent = '▼ Ver';
   }}
+}}
+
+async function _accion(endpoint, btn, labelOk, labelErr) {{
+  var original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ Enviando...';
+  try {{
+    var r = await fetch(endpoint, {{
+      method: 'POST',
+      headers: {{'Content-Type': 'application/x-www-form-urlencoded'}},
+      body: 'id_conversacion=' + encodeURIComponent(btn.dataset.id)
+    }});
+    var data = await r.json();
+    if (data.ok) {{
+      btn.textContent = '✅ ' + (data.message || labelOk);
+      btn.classList.add('success');
+    }} else {{
+      btn.textContent = '❌ ' + (data.message || labelErr);
+      btn.classList.add('error');
+      setTimeout(function() {{
+        btn.textContent = original;
+        btn.classList.remove('error');
+        btn.disabled = false;
+      }}, 4000);
+    }}
+  }} catch(e) {{
+    btn.textContent = '❌ Error de red';
+    btn.classList.add('error');
+    setTimeout(function() {{
+      btn.textContent = original;
+      btn.classList.remove('error');
+      btn.disabled = false;
+    }}, 4000);
+  }}
+}}
+
+function accionResponder(btn) {{
+  _accion('/dashboard/accion/responder', btn, 'DM enviado', 'No se pudo enviar');
+}}
+
+function accionNotificar(btn) {{
+  _accion('/dashboard/accion/notificar', btn, 'Email enviado', 'No se pudo notificar');
 }}
 </script>
 </body>
@@ -547,8 +739,8 @@ body {{
     <div class="login-sub">Dashboard de phishing</div>
     {error_html}
     <div class="field">
-      <label for="username">Usuario</label>
-      <input id="username" name="username" type="text" required autofocus autocomplete="username">
+      <label for="username">Usuario o email</label>
+      <input id="username" name="username" type="text" required autofocus autocomplete="username" placeholder="usuario o correo electrónico">
     </div>
     <div class="field">
       <label for="password">Contraseña</label>
@@ -597,11 +789,90 @@ def logout():
     return response
 
 
+@router.post("/dashboard/accion/notificar")
+async def accion_notificar(request: Request, id_conversacion: str = Form(...)):
+    user = get_current_user(request)
+    if not user or not user.get("es_admin"):
+        return JSONResponse({"ok": False, "message": "Solo el admin puede notificar"}, status_code=403)
+
+    conv = get_conversacion_para_accion(id_conversacion)
+    if not conv:
+        return JSONResponse({"ok": False, "message": "Conversación no encontrada"}, status_code=404)
+
+    owner_email = conv.get("owner_email") or ""
+    if not owner_email or "@" not in owner_email:
+        return JSONResponse({"ok": False, "message": "El usuario no tiene email configurado"})
+
+    ok = await send_email_alert(
+        to_email=owner_email,
+        username=conv.get("owner_username") or "usuario",
+        sender_handle=conv.get("participante_username") or conv.get("participante_id") or "desconocido",
+        risk_level=conv.get("risk_level_actual") or "HIGH",
+        categoria=conv.get("categoria_ataque") or "Actividad sospechosa detectada",
+        explanation=conv.get("explicacion_usuario") or "Se detectó actividad sospechosa en tu cuenta.",
+        mitre_technique=conv.get("tecnica_mitre") or "—",
+        smtp_host=settings.SMTP_HOST,
+        smtp_port=settings.SMTP_PORT,
+        smtp_user=settings.SMTP_USER,
+        smtp_password=settings.SMTP_PASSWORD,
+        smtp_from=settings.SMTP_FROM,
+    )
+    if ok:
+        return JSONResponse({"ok": True, "message": f"Email enviado a {owner_email}"})
+    return JSONResponse({"ok": False, "message": "No se pudo enviar el email (SMTP)"})
+
+
+@router.post("/dashboard/accion/responder")
+async def accion_responder(request: Request, id_conversacion: str = Form(...)):
+    user = get_current_user(request)
+    if not user:
+        return JSONResponse({"ok": False, "message": "No autorizado"}, status_code=403)
+
+    conv = get_conversacion_para_accion(id_conversacion)
+    if not conv:
+        return JSONResponse({"ok": False, "message": "Conversación no encontrada"}, status_code=404)
+
+    cuenta_id = conv.get("cuenta_monitoreada") or ""
+    sender_id = conv.get("participante_id") or ""
+
+    if not sender_id:
+        return JSONResponse({"ok": False, "message": "ID del remitente no disponible"})
+
+    token = _get_token_for_account(cuenta_id)
+    if not token:
+        return JSONResponse({"ok": False, "message": "Esta cuenta no tiene token configurado"})
+
+    ok = await send_phishing_alert(
+        ig_user_id=cuenta_id,
+        sender_id=sender_id,
+        explanation=conv.get("explicacion_usuario") or "Se detectó actividad sospechosa en este mensaje.",
+        categoria=conv.get("categoria_ataque") or "phishing",
+        token=token,
+    )
+    if ok:
+        _marcar_respondido_sync(id_conversacion)
+        return JSONResponse({"ok": True, "message": "DM enviado al remitente"})
+    return JSONResponse({"ok": False, "message": "No se pudo enviar el DM (ventana 24hs o token inválido)"})
+
+
 @router.get("/dashboard", response_class=HTMLResponse)
-def dashboard(request: Request):
+def dashboard(request: Request, filtro: str | None = Query(default=None)):
     user = get_current_user(request)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
-    ig_filter = None if user.get("es_admin") else user.get("ig_user_id")
+
+    usuarios_list: list = []
+    if user.get("es_admin"):
+        usuarios_list = get_all_ig_usuarios()
+        ig_filter = None
+        if filtro:
+            ig_filter = next(
+                (u["ig_user_id"] for u in usuarios_list if u["ig_username"] == filtro),
+                None,
+            )
+    else:
+        ig_filter = user.get("ig_user_id")
+        filtro = None
+
     data = get_dashboard_data(ig_user_id=ig_filter)
-    return render_html(data, user)
+    return render_html(data, user, usuarios_list=usuarios_list, filtro_activo=filtro)

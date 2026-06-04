@@ -1,156 +1,97 @@
-═══════════════════════════════════════════════════════════════════
-  LINK SEGURO — PARA RETOMAR
-  Última actualización: 2026-05-29 (final de sesión)
-  Complementa a ESTADO_SESION.txt — acá quedan los pendientes y
-  decisiones de la última vuelta.
-═══════════════════════════════════════════════════════════════════
+RETOMAR — Link Seguro
+======================
+Última sesión: 2026-06-03
 
 
-LO QUE PASÓ AL FINAL DE LA SESIÓN
-───────────────────────────────────────────────────────────────────
+ESTADO AL CERRAR
+-----------------
+Todo funciona. Servidor apagado. Hacer commit antes de arrancar.
 
-1. Re-import de gimenezbenja2
-   - El export inicial trajo 5 JSONs; un re-export trajo 12 JSONs
-     completos. Re-corrimos `import_conversations.py`.
-   - Resultado: 2253 mensajes importados (idempotente, sin duplicar).
-   - Dashboard de benja pasó de 4 conv / 71 msg → 9 conv / 978 msg.
-
-2. Fix del bug id_conversacion (no bidireccional)
-   - Archivo: app/db/sqlite_client.py — función save_message.
-   - Antes:  id_conversacion = sha256(sender_id + recipient_id)
-   - Ahora:  a, b = sorted([sender_id, recipient_id])
-             id_conversacion = sha256(a + b)
-   - Verificado: el mismo hash para entrante y saliente entre
-     dos cuentas dadas (mismas dos partes → mismo conv_id).
-   - uvicorn corre con --reload, ya tomó el cambio.
+Archivos modificados pendientes de commit (sesión 2026-06-03):
+  - src/scripts/setup_usuarios.py              (emails reales + admin = SMTP_USER)
+  - src/app/dashboard/auth.py                  (login por username OR email)
+  - src/app/dashboard/router.py                (filtros admin + botones acción + endpoints)
+  - src/app/notifications/email_notifier.py    (template bienvenida + send_welcome_email)
+  - src/scripts/test_email.py                  (3 escenarios: bienvenida + HIGH + MEDIUM)
+  - ESTADO_PROYECTO.txt                        (actualizado)
+  - PROXIMOS_PASOS.txt                         (nuevo — roadmap de funcionalidades)
 
 
-LO QUE EL FIX ARREGLA
-───────────────────────────────────────────────────────────────────
+PARA ARRANCAR
+--------------
+cd ~/Escritorio/TIF-3/TIF-VB-GIMENEZ/src
+source .venv/bin/activate
+uvicorn app.main:app --reload --port 8000
+ngrok http 8000   ← en otra terminal
 
-   ✅  Mensajes NUEVOS que lleguen vía webhook unifican entrante
-       y saliente en una sola row de `conversacion`.
-
-   ❌  NO toca los rows ya guardados. Las históricas (importadas
-       de Graph API + las viejas de flia_test) siguen partidas.
-
-
-CONVERSACIONES "RARAS" EN LA BD
-───────────────────────────────────────────────────────────────────
-
-  Algunas personas aparecen con MENOS mensajes de los esperados en
-  el dashboard de benja, porque buena parte de la conversación
-  quedó en otra row con cuenta_monitoreada = ID de la otra persona.
-
-  Ejemplos visibles para benja:
-    - lautaro._.1908  → 609 msg visibles (en JSON: 3589 total)
-    - axenide         → 172 msg visibles (en JSON: 1430 total)
-    - federicodavara  → 67 msg visibles  (en JSON: 168 total)
-    - hernestolopez   → 2 msg visibles   (entrantes del webhook +
-                                          1 entrante del import)
-
-  El resto de mensajes existe en la BD pero con `cuenta_monitoreada`
-  igual al ID de la otra persona (los SALIENTES de gimenezbenja2).
-
-  Razón técnica: en import_conversations.py, cuando el mensaje es
-  saliente, `recipient_id = external_id` y por eso
-  `cuenta_monitoreada = external_id` (no benja). El primer INSERT
-  define ambos campos y el ON CONFLICT no los actualiza.
+Dashboard: http://localhost:8000/dashboard  (admin / admin123)
+Inspector: http://127.0.0.1:4040
 
 
-PENDIENTE PRINCIPAL — MIGRACIÓN DE HISTÓRICAS
-───────────────────────────────────────────────────────────────────
+LO QUE SE AGREGÓ EN ESTA SESIÓN
+---------------------------------
+1. Emails reales en BD:
+     flia_test  → fliagimenez2026@gmail.com
+     hernesto   → hernestolopez2026@gmail.com
+     benja      → gimenezbenja2@gmail.com
+     admin      → linkseguro.tif@gmail.com  (= SMTP_USER del .env)
 
-  Para que benja vea TODOS los mensajes (entrantes + salientes) en
-  una sola row por persona, hay que correr una migración SQL que:
+2. Login acepta username O email (auth.py + formulario actualizado).
 
-    1. Recalcule id_conversacion para todos los rows existentes
-       usando el hash bidireccional.
-    2. Fusione rows que ahora colisionan (mismos dos IDs).
-       Sumar total_mensajes, tomar el max(ultimo_mensaje_at),
-       mantener cuenta_monitoreada = la del usuario monitoreado
-       (no del externo).
-    3. Hacer lo mismo en tabla `mensaje` (su id_conversacion FK).
+3. Email de bienvenida: send_welcome_email() en email_notifier.py.
+   Template HTML verde con explicación del sistema y botón al dashboard.
 
-  Alternativa más simple (recomendada si la fidelidad histórica
-  no es crítica para la demo):
+4. Test de emails: scripts/test_email.py
+   3 escenarios × 4 usuarios = 12 emails (bienvenida + HIGH + MEDIUM).
 
-    a) Borrar todos los rows con
-       cuenta_monitoreada NOT IN (lista de ig_user_id de usuarios
-       no admin, p.ej. 17841407634191670 para benja).
-    b) Re-importar los JSONs forzando que recipient_id sea
-       SIEMPRE el ID monitoreado (modificar import_conversations.py
-       para que pase app_scoped_id como recipient_id incluso en
-       salientes, y el `es_entrante` se calcule por separado).
+5. Filtros por cuenta en dashboard admin (barra de botones + ?filtro= en URL).
+   Los contadores de riesgo también se filtran.
 
-  Decidir antes de la demo si vale la pena el esfuerzo o no.
-
-
-OTROS PENDIENTES (sin orden)
-───────────────────────────────────────────────────────────────────
-
-  [ ] Las históricas importadas NO se analizaron por el orchestrator
-      (siguen con risk_level=LOW por default). Armar
-      `scripts/analyze_imported.py` si querés que aparezcan con
-      score real y categoría MITRE.
-
-  [ ] SESSION_SECRET en .env sigue siendo "link_seguro_secret_2024".
-      Cambiar por algo random antes de mostrar el sistema a
-      terceros (`python -c "import secrets; print(secrets.token_urlsafe(48))"`).
-
-  [ ] hernestolopez2026 sigue sin DMs en su filtro:
-      - Su token (Ernesto_TEST_TOKEN) está vacío en .env.
-      - Su IGSID de webhook NO se verificó (en setup_usuarios.py
-        figura 955769153705305, que es lo que pediste en el prompt,
-        pero podría no ser el ID app-scoped del webhook).
-      - Para validarlo: pedirle que se loguee en su cuenta IG,
-        autorizar la app, y mandar un DM a benja. El payload va
-        a traer el ID que Meta le asigna a hernesto.
-
-  [ ] Considerar agregar /users en el dashboard para que admin
-      pueda crear/editar usuarios sin tocar setup_usuarios.py.
+6. Botones de acción manual en cada conversación (▼ Ver → sección Acciones):
+     💬 Responder DM   — dispara Instagram Graph API al remitente.
+                         Solo funciona si la cuenta tiene token en .env.
+                         Actualmente: solo fliagimenez2026 (FLIA_TEST_TOKEN).
+     📧 Notificar usuario — admin manda email de alerta al dueño de la cuenta.
+   Ambos usan fetch() (sin recarga). Feedback visual inmediato.
 
 
-COMANDOS ÚTILES PARA RETOMAR
-───────────────────────────────────────────────────────────────────
+PENDIENTES INMEDIATOS
+----------------------
+1. COMMIT
+   git add .
+   git commit -m "feat: v0.4.1 — bienvenida email + filtros admin + botones acción manual"
 
-  # Arrancar todo
-  cd src
-  .venv/bin/uvicorn app.main:app --reload --port 8000
-  ngrok http 8000        # otra terminal — copiar URL y pegar en Meta
-
-  # Inspeccionar la BD
-  sqlite3 data/phishing_detector.db
-  > .schema usuario_sistema
-  > SELECT cuenta_monitoreada, COUNT(*), SUM(total_mensajes)
-    FROM conversacion GROUP BY cuenta_monitoreada;
-
-  # Re-import (idempotente)
-  .venv/bin/python scripts/import_conversations.py \
-    --dir data/conversations/gimenezbenja2
-
-  # Re-export desde Graph API
-  TOKEN=$(grep "^Personal_TEST_TOKEN=" .env | cut -d= -f2-)
-  .venv/bin/python export_conversations.py \
-    --token "$TOKEN" \
-    --ig-user-id 26555696997406448 \
-    --app-scoped-id 17841407634191670 \
-    --output-dir data/conversations/gimenezbenja2
+2. VER PROXIMOS_PASOS.txt para decidir qué construir después.
+   Candidatos principales:
+     [A] Evaluación dataset (precision/recall) — para el informe TIF
+     [B] Página de estadísticas en el dashboard
+     [C] Marcar conversación como falso positivo / confirmado
+     [E] Exportar análisis a CSV
 
 
-ESTADO ACTUAL DE LA BD (al cierre de sesión)
-───────────────────────────────────────────────────────────────────
+CONTEXTO TÉCNICO IMPORTANTE
+-----------------------------
+TOKENS:
+  PAGE_ACCESS_TOKEN    → gimenezbenja2      (NO es la cuenta monitoreada)
+  FLIA_TEST_TOKEN      → fliagimenez2026    (cuenta monitoreada) ← usa el sistema
+  FLIA_TEST_IG_USER_ID → 26628591963436168
+  SMTP_USER            → linkseguro.tif@gmail.com (verificado, funciona)
+  ENABLE_EMAIL_ALERTS  → true
+  Tokens Instagram expiran ~60 días → renovar antes de la presentación.
 
-  Por cuenta_monitoreada:
-    17841407634191670 (benja)         →  9 conv,  978 msg
-    17841428323852479 (flia_test old) →  8 conv,   75 msg
-    955769153705305   (hernesto)      →  0 conv,    0 msg
-    + otros IDs (salientes históricos repartidos)
+FLUJO VERIFICADO:
+  gimenezbenja2 → DM a fliagimenez2026
+  → webhook → análisis → DM automático ✅ → Email HTML ✅
 
-  Total: 2440+ mensajes en SQLite, 16+ conversaciones.
+USUARIOS DASHBOARD:
+  admin     / admin123  → ADMIN, ve todo + filtros + botón Notificar
+  flia_test / link2024  → fliagimenez2026         (solo sus conversaciones)
+  hernesto  / link2024  → hernestolopez2026        (solo sus conversaciones)
+  benja     / link2024  → gimenezbenja2            (solo sus conversaciones)
 
-  Usuarios para probar vistas (sin cambios desde ESTADO_SESION.txt):
-    admin     / admin123   → ADMIN, ve todo
-    flia_test / link2024   → 8 conv (históricas viejas)
-    hernesto  / link2024   → 0 conv
-    benja     / link2024   → 9 conv (gimenezbenja2 — tu personal)
+RESET DE BD ENTRE PRUEBAS:
+  python scripts/reset_analisis.py
+
+BD ACTUAL (2026-06-03):
+  20 conversaciones | 2340 mensajes | 4 análisis registrados
+  (conversaciones importadas de histórico, análisis solo de pruebas en vivo)
