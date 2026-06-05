@@ -106,14 +106,21 @@ claude.md
 AGENTS.md
 agents.md
 
-# ── Archivos locales de sesión ────────────────────────────────
+# ── Archivos locales de sesión / notas de trabajo ────────────
 ESTADO_PROYECTO.txt
+PROXIMOS_PASOS.txt
+DEMO_TUTOR.md
+RETOMAR.md
+research/algo.txt
 src/retomar.txt
+src/algo.txt
 src/ESTADO_SESION.txt
 
 # ── Backups de BD ─────────────────────────────────────────────
 data/*.db.bak.*
 src/data/*.db.bak.*
+src/data/backups/
+data/backups/
 
 # ── Tokens temporales (glob) ──────────────────────────────────
 /tmp/token*.txt
