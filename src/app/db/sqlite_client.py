@@ -197,3 +197,15 @@ async def ya_fue_respondido(id_conversacion: str) -> bool:
         )
         row = await cursor.fetchone()
     return bool(row[0]) if row else False
+
+
+async def es_cuenta_propia(ig_user_id: str) -> bool:
+    """True si el ig_user_id pertenece a una cuenta activamente monitoreada (flia_test, benja).
+    Exluye cuentas de prueba como hernesto que solo envían mensajes de test."""
+    async with aiosqlite.connect(get_db_path()) as db:
+        cursor = await db.execute(
+            "SELECT COUNT(*) FROM usuario_sistema WHERE ig_user_id = ? AND es_cuenta_monitoreada = 1",
+            (ig_user_id,),
+        )
+        row = await cursor.fetchone()
+    return bool(row[0]) if row else False

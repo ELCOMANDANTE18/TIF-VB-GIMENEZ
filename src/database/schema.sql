@@ -62,7 +62,8 @@ CREATE TABLE IF NOT EXISTS usuario_sistema (
     password_hash   TEXT NOT NULL,
     ig_user_id      TEXT,
     ig_username     TEXT,
-    es_admin        INTEGER DEFAULT 0,
+    es_admin                INTEGER DEFAULT 0,
+    es_cuenta_monitoreada   INTEGER DEFAULT 0,
     email           TEXT DEFAULT '',
     creado_at       DATETIME DEFAULT CURRENT_TIMESTAMP
 );

@@ -307,27 +307,32 @@ def _build_rows(conversations: list, is_admin: bool = False) -> str:
         msgs_html = "".join(msg_rows) or "— sin mensajes —"
 
         conv_id_esc = html.escape(conv.get("id_conversacion", ""))
-        already_responded = bool(conv.get("respuesta_enviada"))
-        if already_responded:
-            responder_btn = (
-                '<button class="btn-action" disabled>✅ DM ya enviado</button>'
+
+        if risk in ("HIGH", "MEDIUM"):
+            auto_dm_html = ""
+            if conv.get("respuesta_enviada"):
+                auto_dm_html = '<span class="alert-badge ok" style="font-size:0.73rem;">✅ DM automático enviado</span>'
+
+            notificar_btn = (
+                f'<button class="btn-action btn-notificar" data-id="{conv_id_esc}" '
+                f'onclick="accionNotificar(this)">📧 Notificar usuario</button>'
+            ) if is_admin else ""
+
+            acciones_html = (
+                '<div class="detail-block full-width actions-block">'
+                '<div class="detail-label">Acciones manuales</div>'
+                '<div class="action-btns">' + notificar_btn + auto_dm_html + '</div>'
+                '</div>'
             )
         else:
-            responder_btn = (
-                f'<button class="btn-action btn-responder" data-id="{conv_id_esc}" '
-                f'onclick="accionResponder(this)">💬 Responder DM</button>'
+            acciones_html = (
+                '<div class="detail-block full-width actions-block">'
+                '<div class="detail-label">Acciones manuales</div>'
+                '<div class="detail-value" style="color:#444;font-size:0.78rem;">'
+                '— Sin riesgo detectado, no se requieren acciones —'
+                '</div>'
+                '</div>'
             )
-        notificar_btn = (
-            f'<button class="btn-action btn-notificar" data-id="{conv_id_esc}" '
-            f'onclick="accionNotificar(this)">📧 Notificar usuario</button>'
-        ) if is_admin else ""
-
-        acciones_html = (
-            '<div class="detail-block full-width actions-block">'
-            '<div class="detail-label">Acciones manuales</div>'
-            '<div class="action-btns">' + responder_btn + notificar_btn + '</div>'
-            '</div>'
-        )
 
         detail = (
             '<div class="detail-section">'
@@ -533,8 +538,6 @@ thead th {{
   font-weight:bold; transition:all 0.15s;
 }}
 .btn-action:disabled {{ opacity:0.4; cursor:not-allowed; }}
-.btn-responder {{ background:#0a1a0a; border-color:#00ff88; color:#00ff88; }}
-.btn-responder:hover:not(:disabled) {{ background:#00ff88; color:#000; }}
 .btn-notificar {{ background:#0a0a1a; border-color:#00ccff; color:#00ccff; }}
 .btn-notificar:hover:not(:disabled) {{ background:#00ccff; color:#000; }}
 .btn-action.success {{ border-color:#44ff88 !important; color:#44ff88 !important; background:#001a00 !important; }}
@@ -668,10 +671,6 @@ async function _accion(endpoint, btn, labelOk, labelErr) {{
   }}
 }}
 
-function accionResponder(btn) {{
-  _accion('/dashboard/accion/responder', btn, 'DM enviado', 'No se pudo enviar');
-}}
-
 function accionNotificar(btn) {{
   _accion('/dashboard/accion/notificar', btn, 'Email enviado', 'No se pudo notificar');
 }}
@@ -799,6 +798,9 @@ async def accion_notificar(request: Request, id_conversacion: str = Form(...)):
     if not conv:
         return JSONResponse({"ok": False, "message": "Conversación no encontrada"}, status_code=404)
 
+    if conv.get("risk_level_actual") not in ("HIGH", "MEDIUM"):
+        return JSONResponse({"ok": False, "message": "Acción no disponible: la conversación no presenta riesgo"})
+
     owner_email = conv.get("owner_email") or ""
     if not owner_email or "@" not in owner_email:
         return JSONResponse({"ok": False, "message": "El usuario no tiene email configurado"})
@@ -831,6 +833,9 @@ async def accion_responder(request: Request, id_conversacion: str = Form(...)):
     conv = get_conversacion_para_accion(id_conversacion)
     if not conv:
         return JSONResponse({"ok": False, "message": "Conversación no encontrada"}, status_code=404)
+
+    if conv.get("risk_level_actual") not in ("HIGH", "MEDIUM"):
+        return JSONResponse({"ok": False, "message": "Acción no disponible: la conversación no presenta riesgo"})
 
     cuenta_id = conv.get("cuenta_monitoreada") or ""
     sender_id = conv.get("participante_id") or ""

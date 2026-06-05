@@ -79,7 +79,7 @@ async def analyze_conversation(
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.1,
-            max_tokens=2000,
+            max_tokens=4000,
         )
 
         raw = (response.choices[0].message.content or "").strip()

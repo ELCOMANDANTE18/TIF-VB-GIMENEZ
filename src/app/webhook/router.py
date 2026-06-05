@@ -4,7 +4,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
 
 from app.analysis.orchestrator import PhishingOrchestrator
 from app.config import settings
-from app.db.sqlite_client import save_message
+from app.db.sqlite_client import save_message, es_cuenta_propia
 from app.models.schemas import RiskLevel
 from app.utils.logger import get_logger
 from app.webhook.validator import verify_signature
@@ -79,6 +79,15 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
             ig_conversation_id = messaging.get("message", {}).get("conversation_id", "")
 
             if sender_id and text and not is_echo:
+                # Ignorar mensajes enviados por nuestras propias cuentas monitoreadas
+                # (ej: respuesta automática de fliagimenez2026 a gimenezbenja2 que
+                # vuelve como webhook entrante en la cuenta de gimenezbenja2)
+                if await es_cuenta_propia(sender_id):
+                    logger.info(
+                        "Mensaje de cuenta propia ignorado: sender=...%s", sender_id[-4:]
+                    )
+                    continue
+
                 logger.info("Mensaje entrante: sender=...%s | texto=%s",
                             sender_id[-4:], text[:50])
                 conv_id = ""
