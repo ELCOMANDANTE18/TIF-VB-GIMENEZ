@@ -224,16 +224,18 @@ def _marcar_respondido_sync(id_conversacion: str) -> None:
         conn.close()
 
 
-def _build_rows(conversations: list, is_admin: bool = False) -> str:
+def _build_rows(conversations: list, is_admin: bool = False) -> str:  # noqa: C901
     if not conversations:
         return (
-            '<tr><td colspan="10" style="text-align:center;padding:40px;color:#555;">'
+            '<tr><td colspan="10" class="text-center py-10 text-[#8A8B85] text-base">'
             "No hay análisis registrados todavía</td></tr>"
         )
 
-    RISK_COLOR = {"HIGH": "#ff4444", "MEDIUM": "#ffaa00", "LOW": "#44ff88"}
-    RISK_EMOJI = {"HIGH": "🔴", "MEDIUM": "🟡", "LOW": "🟢"}
-    ROW_BG = {"HIGH": "#2d0000", "MEDIUM": "#2d2000", "LOW": "#002d00"}
+    RISK_COLOR = {"HIGH": "#C2554B", "MEDIUM": "#B59628", "LOW": "#6E8F73"}
+    RISK_BG    = {"HIGH": "#F5D9CC",  "MEDIUM": "#F5E9C2",  "LOW": "#E8F3EA"}
+    RISK_EMOJI = {"HIGH": "🔴",       "MEDIUM": "🟡",        "LOW": "🟢"}
+    ROW_BG     = {"HIGH": "#FDECEA",   "MEDIUM": "#FEF9E7",   "LOW": "#FAFAF8"}
+    ROW_BORDER = {"HIGH": "#C2554B",   "MEDIUM": "#B59628",   "LOW": "#E9E6DD"}
 
     rows = []
     for i, conv in enumerate(conversations):
@@ -241,140 +243,174 @@ def _build_rows(conversations: list, is_admin: bool = False) -> str:
         uname = conv.get("participante_username") or ""
         pid = str(conv.get("participante_id") or "")
         if uname:
-            usuario_html = f"@{_e(uname)}"
+            usuario_html = f'<span class="font-mono text-[#6E8F73]">@{_e(uname)}</span>'
         else:
-            usuario_html = f"...{_e(pid[-8:])}"
+            usuario_html = f'<span class="font-mono text-[#8A8B85]">...{_e(pid[-8:])}</span>'
 
         badge_color = RISK_COLOR.get(risk, "#888")
-        emoji = RISK_EMOJI.get(risk, "⚪")
-        row_bg = ROW_BG.get(risk, "#111")
+        badge_bg    = RISK_BG.get(risk, "#1a1a1a")
+        emoji       = RISK_EMOJI.get(risk, "⚪")
+        row_bg      = ROW_BG.get(risk, "")
+        row_border  = ROW_BORDER.get(risk, "transparent")
+
+        row_style = f"background:{row_bg}; border-left:5px solid {row_border};"
 
         score = conv.get("score_final")
+        score_val = score if score is not None else 0.0
         score_str = f"{score:.2f}" if score is not None else "—"
+        score_pct = int(score_val * 100)
 
-        # Estado de la respuesta automática
         if conv.get("respuesta_enviada"):
             alerta_html = (
-                '<span class="alert-badge ok">✅ Alertado</span>'
+                '<span class="inline-block text-sm py-1 px-3 rounded-xl '
+                'bg-[#E8F3EA] text-[#6E8F73] border border-[#6E8F73] font-medium whitespace-nowrap">'
+                '✅ Alertado</span>'
             )
         elif risk == "HIGH":
             alerta_html = (
-                '<span class="alert-badge pending">⏳ Pendiente</span>'
+                '<span class="inline-block text-sm py-1 px-3 rounded-xl '
+                'bg-[#F5E9C2] text-[#B59628] border border-[#B59628] font-medium whitespace-nowrap">'
+                '⏳ Pendiente</span>'
             )
         else:
-            alerta_html = "—"
+            alerta_html = '<span class="text-[#8A8B85]">—</span>'
 
-        ultimo_raw = conv.get("ultimo_mensaje_at")
-        ultimo = _e(_fmt_ts(ultimo_raw))
+        ultimo = _e(_fmt_ts(conv.get("ultimo_mensaje_at")))
 
-        # Cialdini badges
         cialdini_html = " ".join(
-            f'<span class="badge">{_e(p)}</span>'
+            f'<span class="inline-block text-sm py-1 px-3 rounded-full '
+            f'bg-[#F5E9C2] text-[#B59628] border border-[#B59628] m-0.5">{_e(p)}</span>'
             for p in (conv.get("principios_cialdini") or [])
-        ) or "—"
+        ) or '<span class="text-[#8A8B85]">—</span>'
 
-        # Suspicious URLs
         urls_items = []
         for u in (conv.get("urls_sospechosas") or []):
             if isinstance(u, dict):
                 url_txt = _e(u.get("url", ""))
-                razon = _e(u.get("razon") or u.get("reason", ""))
+                razon   = _e(u.get("razon") or u.get("reason", ""))
                 urls_items.append(
-                    f'<div class="url-item">'
-                    f'<span class="url-text">{url_txt}</span>'
-                    f' — <span class="url-reason">{razon}</span></div>'
+                    f'<div class="flex gap-2 items-start py-1.5 border-b border-[#E9E6DD] text-sm">'
+                    f'<span class="text-[#C2554B] font-mono break-all">{url_txt}</span>'
+                    f'<span class="text-[#8A8B85] italic shrink-0">— {razon}</span></div>'
                 )
             else:
-                urls_items.append(f'<div class="url-item">{_e(str(u))}</div>')
-        urls_html = "".join(urls_items) or "—"
+                urls_items.append(
+                    f'<div class="py-1.5 text-sm font-mono text-[#C2554B]">{_e(str(u))}</div>'
+                )
+        urls_html = "".join(urls_items) or '<span class="text-[#8A8B85]">—</span>'
 
-        # Message history (show oldest → newest)
         mensajes = list(reversed(conv.get("mensajes") or []))
         msg_rows = []
         for m in mensajes:
             ts_str = _fmt_ts(m.get("timestamp_ig"))
-            direction = "←" if m.get("es_entrante") else "→"
-            sender = _e(m.get("sender_id", ""))
-            texto = _e(m.get("texto", ""))
+            is_incoming = m.get("es_entrante")
+            if is_admin:
+                texto = '<em class="text-[#8A8B85] text-sm">[contenido protegido — solo visible para el operador]</em>'
+            else:
+                texto = _e(m.get("texto", ""))
+            if is_incoming:
+                bubble = "bg-[#F7F5EE] rounded-2xl rounded-tl-sm"
+                wrap   = "justify-start"
+            else:
+                bubble = "bg-[#E8F3EA] rounded-2xl rounded-tr-sm"
+                wrap   = "justify-end"
             msg_rows.append(
-                f'<div class="msg-row">'
-                f'<span class="msg-ts">{ts_str}</span>'
-                f'<span class="msg-dir">{direction}</span>'
-                f'<span class="msg-sender">{sender}</span>'
-                f'<span class="msg-text">{texto}</span>'
-                f"</div>"
+                f'<div class="flex {wrap} mb-2">'
+                f'<div class="{bubble} px-4 py-2 max-w-[80%]">'
+                f'<p class="text-base text-[#1B1D1C] break-words">{texto}</p>'
+                f'<p class="text-xs text-[#8A8B85] mt-1">{ts_str}</p>'
+                f'</div></div>'
             )
-        msgs_html = "".join(msg_rows) or "— sin mensajes —"
+        msgs_html = (
+            "".join(msg_rows)
+            or '<p class="text-[#8A8B85] text-sm">— sin mensajes —</p>'
+        )
 
         conv_id_esc = html.escape(conv.get("id_conversacion", ""))
 
         if risk in ("HIGH", "MEDIUM"):
             auto_dm_html = ""
             if conv.get("respuesta_enviada"):
-                auto_dm_html = '<span class="alert-badge ok" style="font-size:0.73rem;">✅ DM automático enviado</span>'
-
+                auto_dm_html = (
+                    '<span class="inline-flex items-center gap-2 text-base py-2 px-4 rounded-xl '
+                    'bg-[#E8F3EA] text-[#6E8F73] border border-[#6E8F73] font-medium">'
+                    '✅ DM automático enviado</span>'
+                )
             notificar_btn = (
-                f'<button class="btn-action btn-notificar" data-id="{conv_id_esc}" '
-                f'onclick="accionNotificar(this)">📧 Notificar usuario</button>'
+                f'<button class="btn-action btn-notificar flex items-center gap-2 text-base py-3 px-6 '
+                f'rounded-xl font-semibold bg-[#EEF3FA] border border-[#4A6A99] text-[#4A6A99] '
+                f'hover:bg-[#4A6A99] hover:text-white transition-colors cursor-pointer" '
+                f'data-id="{conv_id_esc}" onclick="accionNotificar(this)">'
+                f'📧 Notificar usuario</button>'
             ) if is_admin else ""
-
             acciones_html = (
-                '<div class="detail-block full-width actions-block">'
-                '<div class="detail-label">Acciones manuales</div>'
-                '<div class="action-btns">' + notificar_btn + auto_dm_html + '</div>'
+                '<div class="col-span-2 bg-[#F0F8F0] border border-[#A8C8A8] rounded-xl p-5">'
+                '<p class="text-base font-semibold uppercase tracking-wider text-[#8A8B85] mb-3">Acciones manuales</p>'
+                f'<div class="flex gap-3 flex-wrap">{notificar_btn}{auto_dm_html}</div>'
                 '</div>'
             )
         else:
             acciones_html = (
-                '<div class="detail-block full-width actions-block">'
-                '<div class="detail-label">Acciones manuales</div>'
-                '<div class="detail-value" style="color:#444;font-size:0.78rem;">'
-                '— Sin riesgo detectado, no se requieren acciones —'
-                '</div>'
+                '<div class="col-span-2 bg-[#F7F5EE] border border-[#E9E6DD] rounded-xl p-5">'
+                '<p class="text-base font-semibold uppercase tracking-wider text-[#8A8B85] mb-3">Acciones manuales</p>'
+                '<p class="text-sm text-[#8A8B85]">— Sin riesgo detectado, no se requieren acciones —</p>'
                 '</div>'
             )
 
         detail = (
-            '<div class="detail-section">'
-            '<div class="detail-block">'
-            '<div class="detail-label">Explicación para el usuario</div>'
-            f'<div class="detail-value">{_e(conv.get("explicacion_usuario"))}</div>'
-            "</div>"
-            '<div class="detail-block">'
-            '<div class="detail-label">Explicación técnica (analista)</div>'
-            f'<div class="detail-value mono">{_e(conv.get("explicacion_analista"))}</div>'
-            "</div>"
-            '<div class="detail-block">'
-            '<div class="detail-label">Principios de Cialdini detectados</div>'
-            f'<div class="detail-value">{cialdini_html}</div>'
-            "</div>"
-            '<div class="detail-block">'
-            '<div class="detail-label">URLs sospechosas encontradas</div>'
-            f'<div class="detail-value">{urls_html}</div>'
-            "</div>"
-            '<div class="detail-block full-width">'
-            '<div class="detail-label">Últimos 10 mensajes</div>'
-            f'<div class="msg-list">{msgs_html}</div>'
-            "</div>"
+            '<div class="bg-[#F7F5EE] p-6 rounded-b-2xl grid grid-cols-1 md:grid-cols-2 gap-4">'
+            '<div class="bg-[#FFFFFF] border border-[#E9E6DD] rounded-xl p-4">'
+            '<p class="text-base font-semibold uppercase tracking-wider text-[#8A8B85] mb-3">Explicación para el usuario</p>'
+            f'<p class="text-base text-[#1B1D1C] leading-relaxed">{_e(conv.get("explicacion_usuario"))}</p>'
+            '</div>'
+            '<div class="bg-[#FFFFFF] border border-[#E9E6DD] rounded-xl p-4">'
+            '<p class="text-base font-semibold uppercase tracking-wider text-[#8A8B85] mb-3">Explicación técnica (analista)</p>'
+            f'<p class="text-sm font-mono text-[#1B1D1C] leading-relaxed">{_e(conv.get("explicacion_analista"))}</p>'
+            '</div>'
+            '<div class="bg-[#FFFFFF] border border-[#E9E6DD] rounded-xl p-4">'
+            '<p class="text-base font-semibold uppercase tracking-wider text-[#8A8B85] mb-3">Principios de Cialdini</p>'
+            f'<div class="flex flex-wrap gap-1">{cialdini_html}</div>'
+            '</div>'
+            '<div class="bg-[#FFFFFF] border border-[#E9E6DD] rounded-xl p-4">'
+            '<p class="text-base font-semibold uppercase tracking-wider text-[#8A8B85] mb-3">URLs sospechosas</p>'
+            f'<div>{urls_html}</div>'
+            '</div>'
+            '<div class="col-span-full bg-[#FFFFFF] border border-[#E9E6DD] rounded-xl p-4">'
+            '<p class="text-base font-semibold uppercase tracking-wider text-[#8A8B85] mb-3">Últimos 10 mensajes</p>'
+            f'<div class="max-h-64 overflow-y-auto">{msgs_html}</div>'
+            '</div>'
             f'{acciones_html}'
-            "</div>"
+            '</div>'
         )
 
         rows.append(
-            f'<tr class="conv-row" style="background:{row_bg};" onclick="toggleDetail({i})">'
-            f'<td class="mono">{usuario_html}</td>'
-            f'<td><span class="risk-badge" style="background:{badge_color};">{emoji} {risk}</span></td>'
-            f'<td class="mono small">{_e(conv.get("categoria_ataque"))}</td>'
-            f'<td class="mono small">{_e(conv.get("tecnica_mitre"))}</td>'
-            f'<td class="mono center">{score_str}</td>'
-            f'<td class="mono small">{_e(conv.get("etapa_lifecycle"))}</td>'
-            f'<td class="mono small">{_e(conv.get("accion_recomendada"))}</td>'
-            f'<td class="center">{alerta_html}</td>'
-            f'<td class="mono small">{ultimo}</td>'
-            f'<td><button class="btn-detail" id="btn-{i}" onclick="event.stopPropagation();toggleDetail({i})">▼ Ver</button></td>'
+            f'<tr class="conv-row cursor-pointer transition-all" style="{row_style}" onclick="toggleDetail({i})">'
+            f'<td class="py-4 px-4">{usuario_html}</td>'
+            f'<td class="py-4 px-4">'
+            f'<span class="inline-block text-sm py-1 px-3 rounded-full font-semibold border" '
+            f'style="background:{badge_bg}; color:{badge_color}; border-color:{badge_color};">'
+            f'{emoji} {risk}</span></td>'
+            f'<td class="py-4 px-4 text-base text-[#8A8B85] font-mono">{_e(conv.get("categoria_ataque"))}</td>'
+            f'<td class="py-4 px-4 text-base text-[#8A8B85] font-mono">{_e(conv.get("tecnica_mitre"))}</td>'
+            f'<td class="py-4 px-4 text-center">'
+            f'<span class="font-mono text-base font-semibold" style="color:{badge_color};">{score_str}</span>'
+            f'<div class="w-20 h-2 bg-[#E9E6DD] rounded-full mt-1 mx-auto overflow-hidden">'
+            f'<div class="h-full rounded-full" style="width:{score_pct}%;background:{badge_color};"></div>'
+            f'</div></td>'
+            f'<td class="py-4 px-4 text-base text-[#8A8B85] font-mono">{_e(conv.get("etapa_lifecycle"))}</td>'
+            f'<td class="py-4 px-4 text-base text-[#8A8B85] font-mono">{_e(conv.get("accion_recomendada"))}</td>'
+            f'<td class="py-4 px-4 text-center">{alerta_html}</td>'
+            f'<td class="py-4 px-4 text-base font-mono text-[#8A8B85] whitespace-nowrap">{ultimo}</td>'
+            f'<td class="py-4 px-4">'
+            f'<button class="flex items-center gap-1 text-sm py-2 px-4 rounded-lg '
+            f'bg-[#F7F5EE] hover:bg-[#E9E6DD] text-[#1B1D1C] border border-[#E9E6DD] '
+            f'cursor-pointer transition-colors whitespace-nowrap" '
+            f'id="btn-{i}" onclick="event.stopPropagation();toggleDetail({i})">'
+            f'<span id="chevron-{i}" style="display:inline-block;transition:transform 0.2s;">▼</span>'
+            f' Ver</button></td>'
             "</tr>"
-            f'<tr id="detail-{i}" class="detail-row" style="display:none;">'
-            f"<td colspan=\"10\">{detail}</td>"
+            f'<tr id="detail-{i}" style="display:none;">'
+            f'<td colspan="10" class="p-0 border-b-2 border-[#E9E6DD]">{detail}</td>'
             "</tr>"
         )
 
@@ -390,24 +426,42 @@ def render_html(
     rows_html = _build_rows(data["conversations"], is_admin=bool(user.get("es_admin")))
     last = _e(_fmt_ts(data["last_analysis"]))
     username_html = _e(user.get("username", ""))
-    admin_badge = (
-        '<span class="admin-badge">ADMIN</span>' if user.get("es_admin") else ""
-    )
+
+    if user.get("es_admin"):
+        role_badge = (
+            '<span class="text-sm py-1 px-3 rounded-full bg-[#C9D6E8] '
+            'text-[#7A95C2] border border-[#5D7DAB] font-semibold">ADMIN</span>'
+        )
+    else:
+        role_badge = (
+            '<span class="text-sm py-1 px-3 rounded-full bg-[#F7F5EE] '
+            'text-[#8A8B85] border border-[#E9E6DD] font-semibold">USER</span>'
+        )
 
     filter_bar_html = ""
     if user.get("es_admin") and usuarios_list:
-        all_active = " active" if not filtro_activo else ""
-        btns = [f'<a href="/dashboard" class="filter-btn{all_active}">Todas las cuentas</a>']
+        all_cls = ("border-[#6E8F73] text-[#6E8F73] bg-[#E8F3EA] font-bold"
+                   if not filtro_activo
+                   else "border-[#E9E6DD] text-[#8A8B85]")
+        btns = [
+            f'<a href="/dashboard" class="py-1.5 px-4 rounded-full border text-sm '
+            f'no-underline transition-colors {all_cls}">Todas las cuentas</a>'
+        ]
         for u in usuarios_list:
             ig = u.get("ig_username") or ""
             if not ig:
                 continue
-            act = " active" if ig == filtro_activo else ""
+            act_cls = ("border-[#6E8F73] text-[#6E8F73] bg-[#E8F3EA] font-bold"
+                       if ig == filtro_activo
+                       else "border-[#E9E6DD] text-[#8A8B85]")
             btns.append(
-                f'<a href="/dashboard?filtro={html.escape(ig)}" class="filter-btn{act}">@{html.escape(ig)}</a>'
+                f'<a href="/dashboard?filtro={html.escape(ig)}" '
+                f'class="py-1.5 px-4 rounded-full border text-sm no-underline transition-colors {act_cls}">'
+                f'@{html.escape(ig)}</a>'
             )
         filter_bar_html = (
-            '<div class="filter-bar"><span class="filter-label">Filtrar por cuenta:</span>'
+            '<div class="flex gap-2 items-center mb-5 flex-wrap">'
+            '<span class="text-sm text-[#8A8B85] uppercase tracking-wider mr-1">Filtrar:</span>'
             + "".join(btns)
             + "</div>"
         )
@@ -419,192 +473,106 @@ def render_html(
 <meta http-equiv="refresh" content="30">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Link Seguro — Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
 <style>
-* {{ margin:0; padding:0; box-sizing:border-box; }}
-body {{ background:#0f0f0f; color:#e0e0e0; font-family:'Courier New',Courier,monospace; }}
-
-header {{
-  background:#111; border-bottom:1px solid #1e1e1e;
-  padding:14px 24px; display:flex; justify-content:space-between; align-items:center;
-}}
-h1 {{ font-size:1.35rem; color:#00ff88; letter-spacing:1px; }}
-.refresh-info {{ font-size:0.78rem; color:#555; }}
-.refresh-info span {{ color:#00ccff; }}
-
-.header-right {{ display:flex; align-items:center; gap:14px; }}
-.user-info {{ font-size:0.82rem; color:#bbb; }}
-.user-info b {{ color:#00ccff; }}
-.admin-badge {{
-  display:inline-block; background:#3a0000; border:1px solid #ff4444;
-  color:#ff4444; padding:2px 8px; border-radius:10px;
-  font-size:0.65rem; font-weight:bold; letter-spacing:1px; margin-left:6px;
-}}
-.btn-logout {{
-  background:#1a0a0a; border:1px solid #ff4444; color:#ff4444;
-  padding:5px 12px; border-radius:4px; cursor:pointer;
-  font-size:0.72rem; font-family:inherit; text-decoration:none;
-}}
-.btn-logout:hover {{ background:#ff4444; color:#000; }}
-
-.container {{ padding:24px; max-width:1700px; margin:0 auto; }}
-
-/* ── Cards ── */
-.cards {{ display:flex; gap:14px; margin-bottom:26px; flex-wrap:wrap; }}
-.card {{
-  flex:1; min-width:155px; background:#131313;
-  border:1px solid #232323; border-radius:6px; padding:18px;
-}}
-.card-label {{ font-size:0.72rem; color:#666; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; }}
-.card-value {{ font-size:2rem; font-weight:bold; }}
-.card-value.total   {{ color:#00ccff; }}
-.card-value.high    {{ color:#ff4444; }}
-.card-value.medium  {{ color:#ffaa00; }}
-.card-value.low     {{ color:#44ff88; }}
-.card-value.ts      {{ font-size:0.82rem; color:#888; margin-top:4px; }}
-.card-sub {{ font-size:0.68rem; color:#444; margin-top:5px; }}
-
-/* ── Table ── */
-.table-wrapper {{ overflow-x:auto; border-radius:6px; border:1px solid #222; }}
-table {{ width:100%; border-collapse:collapse; }}
-thead th {{
-  background:#161616; color:#00ff88; padding:11px 10px;
-  text-align:left; font-size:0.72rem; text-transform:uppercase;
-  letter-spacing:1px; border-bottom:1px solid #2a2a2a; white-space:nowrap;
-}}
-.conv-row {{ cursor:pointer; transition:filter 0.12s; }}
-.conv-row:hover {{ filter:brightness(1.35); }}
-.conv-row td {{ padding:9px 10px; border-bottom:1px solid #181818; font-size:0.81rem; vertical-align:middle; }}
-.mono   {{ font-family:'Courier New',Courier,monospace; }}
-.small  {{ font-size:0.73rem; }}
-.center {{ text-align:center; }}
-
-.risk-badge {{
-  display:inline-block; padding:3px 10px; border-radius:12px;
-  font-size:0.72rem; font-weight:bold; color:#000;
-}}
-.alert-badge {{
-  display:inline-block; padding:3px 9px; border-radius:10px;
-  font-size:0.7rem; font-weight:bold; white-space:nowrap;
-}}
-.alert-badge.ok {{ background:#0a2d12; border:1px solid #44ff88; color:#44ff88; }}
-.alert-badge.pending {{ background:#2d2000; border:1px solid #ffaa00; color:#ffaa00; }}
-.btn-detail {{
-  background:#0a1a0a; border:1px solid #00ff88; color:#00ff88;
-  padding:4px 11px; border-radius:4px; cursor:pointer;
-  font-size:0.72rem; font-family:inherit; white-space:nowrap;
-}}
-.btn-detail:hover {{ background:#00ff88; color:#000; }}
-
-/* ── Detail row ── */
-.detail-row td {{ background:#090909; padding:0; border-bottom:2px solid #2a2a2a; }}
-.detail-section {{
-  padding:18px 24px; display:grid;
-  grid-template-columns:1fr 1fr; gap:14px;
-}}
-.detail-block {{
-  background:#111; border:1px solid #1e1e1e;
-  border-radius:4px; padding:14px;
-}}
-.full-width {{ grid-column:1 / -1; }}
-.detail-label {{ font-size:0.68rem; text-transform:uppercase; letter-spacing:1px; color:#444; margin-bottom:8px; }}
-.detail-value {{ font-size:0.8rem; color:#bbb; line-height:1.55; }}
-.detail-value.mono {{ font-size:0.75rem; }}
-
-.badge {{
-  display:inline-block; background:#1a1000; border:1px solid #ffaa00;
-  color:#ffaa00; padding:2px 8px; border-radius:10px;
-  font-size:0.7rem; margin:2px;
-}}
-.url-item {{ font-size:0.76rem; padding:4px 0; border-bottom:1px solid #181818; }}
-.url-text   {{ color:#ff6666; }}
-.url-reason {{ color:#666; font-style:italic; }}
-
-.msg-list {{ max-height:220px; overflow-y:auto; }}
-.msg-row {{
-  display:flex; gap:10px; padding:5px 0;
-  border-bottom:1px solid #161616; font-size:0.73rem; flex-wrap:wrap;
-}}
-.msg-ts     {{ color:#444; min-width:138px; }}
-.msg-dir    {{ color:#333; }}
-.msg-sender {{ color:#00ccff; min-width:80px; }}
-.msg-text   {{ color:#bbb; flex:1; word-break:break-all; }}
-
-/* ── Action buttons ── */
-.actions-block {{ border-color:#1a2a1a; background:#0a0f0a; }}
-.action-btns {{ display:flex; gap:10px; flex-wrap:wrap; padding-top:4px; }}
-.btn-action {{
-  padding:8px 20px; border-radius:4px; cursor:pointer; border:1px solid;
-  font-size:0.78rem; font-family:'Courier New',Courier,monospace;
-  font-weight:bold; transition:all 0.15s;
-}}
-.btn-action:disabled {{ opacity:0.4; cursor:not-allowed; }}
-.btn-notificar {{ background:#0a0a1a; border-color:#00ccff; color:#00ccff; }}
-.btn-notificar:hover:not(:disabled) {{ background:#00ccff; color:#000; }}
-.btn-action.success {{ border-color:#44ff88 !important; color:#44ff88 !important; background:#001a00 !important; }}
-.btn-action.error   {{ border-color:#ff4444 !important; color:#ff4444 !important; background:#1a0000 !important; }}
-
-/* ── Filter bar ── */
-.filter-bar {{ display:flex; gap:8px; align-items:center; margin-bottom:20px; flex-wrap:wrap; }}
-.filter-label {{ font-size:0.7rem; color:#555; text-transform:uppercase; letter-spacing:1px; margin-right:4px; }}
-.filter-btn {{
-  padding:5px 14px; border-radius:14px; border:1px solid #2a2a2a;
-  color:#666; font-size:0.76rem; text-decoration:none;
-  font-family:'Courier New',Courier,monospace; background:#131313;
-}}
-.filter-btn:hover {{ border-color:#00ccff; color:#00ccff; }}
-.filter-btn.active {{ border-color:#00ff88; color:#00ff88; background:#0a1a0a; font-weight:bold; }}
+  body {{ font-family: 'Inter', sans-serif; }}
+  .font-mono {{ font-family: 'JetBrains Mono', monospace !important; }}
+  .btn-action:disabled {{ opacity: 0.4; cursor: not-allowed !important; }}
+  .btn-action.success {{ border-color: #6E8F73 !important; color: #6E8F73 !important; background: #E8F3EA !important; }}
+  .btn-action.error   {{ border-color: #C2554B !important; color: #C2554B !important; background: #FEF2F2 !important; }}
+  table {{ border-collapse: collapse; width: 100%; }}
+  .conv-row:hover {{ filter: brightness(0.96); }}
+  #progress-bar {{ transition: width 1s linear; }}
+  td {{ vertical-align: middle; border-bottom: 2px solid #E9E6DD; }}
+  tbody tr:nth-child(even) td {{ background: rgba(0,0,0,0.025); }}
 </style>
 </head>
-<body>
-<header>
-  <h1>&#x1F6E1;&#xFE0F; Link Seguro &mdash; Dashboard de Phishing</h1>
-  <div class="header-right">
-    <span class="refresh-info">Próxima actualización en <span id="cd">30</span>s</span>
-    <span class="user-info">Bienvenido, <b>@{username_html}</b>{admin_badge}</span>
-    <a href="/logout" class="btn-logout">Cerrar sesión</a>
+<body class="bg-[#ECEAE3] text-[#1B1D1C] min-h-screen">
+
+<header class="h-16 fixed top-0 left-0 right-0 z-50 bg-[#FFFFFF] border-b border-[#E9E6DD] flex items-center justify-between px-6">
+  <div class="flex items-center gap-2">
+    <img src="/static/logo.png" alt="Link Seguro" class="h-10 w-auto">
+    <span class="text-xl font-bold text-[#1B1D1C] hidden sm:inline">Link Seguro</span>
+  </div>
+  <span class="text-sm text-[#8A8B85] hidden md:block">Dashboard de Seguridad</span>
+  <div class="flex items-center gap-3">
+    <span class="text-base font-medium text-[#1B1D1C]">@{username_html}</span>
+    {role_badge}
+    <a href="/logout" class="text-base py-2 px-4 rounded-lg bg-[#F7F5EE] hover:bg-[#F5D9CC] text-[#1B1D1C] border border-[#E9E6DD] no-underline transition-colors">Cerrar sesión</a>
   </div>
 </header>
-<div class="container">
 
-  <div class="cards">
-    <div class="card">
-      <div class="card-label">Total conversaciones</div>
-      <div class="card-value total">{data["total"]}</div>
+<div class="pt-20 px-6 pb-8 max-w-[1800px] mx-auto">
+
+  <div class="flex items-center justify-end mb-5">
+    <div class="flex items-center gap-3">
+      <span class="text-sm text-[#8A8B85]">Próxima actualización en <span id="cd" class="text-[#6E8F73] font-semibold">30</span>s</span>
+      <div class="w-32 h-1 bg-[#E9E6DD] rounded-full overflow-hidden">
+        <div id="progress-bar" class="h-full bg-[#6E8F73] rounded-full" style="width:100%"></div>
+      </div>
     </div>
-    <div class="card">
-      <div class="card-label">&#x1F534; HIGH risk</div>
-      <div class="card-value high">{data["high_count"]}</div>
+  </div>
+
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+    <div class="bg-[#FFFFFF] border border-[#E9E6DD] rounded-2xl p-6" style="border-left:4px solid #7A95C2">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-base text-[#8A8B85]">Total</span>
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 text-[#7A95C2]" viewBox="0 0 24 24" fill="currentColor"><path d="M5.625 1.5c-1.036 0-1.875.84-1.875 1.875v17.25c0 1.035.84 1.875 1.875 1.875h12.75c1.035 0 1.875-.84 1.875-1.875V12.75A3.75 3.75 0 0016.5 9h-1.875a1.875 1.875 0 01-1.875-1.875V5.25A3.75 3.75 0 009 1.5H5.625z"/><path d="M12.971 1.816A5.23 5.23 0 0114.25 5.25v1.875c0 .207.168.375.375.375H16.5a5.23 5.23 0 013.434 1.279 9.768 9.768 0 00-6.963-6.963z"/></svg>
+      </div>
+      <div class="text-4xl font-bold text-[#7A95C2]">{data["total"]}</div>
+      <div class="text-base text-[#8A8B85] mt-1">conversaciones</div>
     </div>
-    <div class="card">
-      <div class="card-label">&#x1F7E1; MEDIUM risk</div>
-      <div class="card-value medium">{data["medium_count"]}</div>
+    <div class="bg-[#FFFFFF] border border-[#E9E6DD] rounded-2xl p-6" style="border-left:4px solid #C2554B">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-base text-[#8A8B85]">HIGH</span>
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 text-[#C2554B]" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clip-rule="evenodd"/></svg>
+      </div>
+      <div class="text-4xl font-bold text-[#C2554B]">{data["high_count"]}</div>
+      <div class="text-base text-[#8A8B85] mt-1">alto riesgo</div>
     </div>
-    <div class="card">
-      <div class="card-label">&#x1F7E2; LOW risk</div>
-      <div class="card-value low">{data["low_count"]}</div>
+    <div class="bg-[#FFFFFF] border border-[#E9E6DD] rounded-2xl p-6" style="border-left:4px solid #B59628">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-base text-[#8A8B85]">MEDIUM</span>
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 text-[#B59628]" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm8.706-1.442c1.146-.573 2.437.463 2.126 1.706l-.709 2.836.042-.02a.75.75 0 01.67 1.34l-.04.022c-1.147.573-2.438-.463-2.127-1.706l.71-2.836-.042.02a.75.75 0 11-.671-1.34l.041-.022zM12 9a.75.75 0 100-1.5.75.75 0 000 1.5z" clip-rule="evenodd"/></svg>
+      </div>
+      <div class="text-4xl font-bold text-[#B59628]">{data["medium_count"]}</div>
+      <div class="text-base text-[#8A8B85] mt-1">riesgo medio</div>
     </div>
-    <div class="card">
-      <div class="card-label">Último análisis</div>
-      <div class="card-value ts">{last}</div>
-      <div class="card-sub">analizado_at (GMT-3 Mendoza)</div>
+    <div class="bg-[#FFFFFF] border border-[#E9E6DD] rounded-2xl p-6" style="border-left:4px solid #6E8F73">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-base text-[#8A8B85]">LOW</span>
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 text-[#6E8F73]" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clip-rule="evenodd"/></svg>
+      </div>
+      <div class="text-4xl font-bold text-[#6E8F73]">{data["low_count"]}</div>
+      <div class="text-base text-[#8A8B85] mt-1">bajo riesgo</div>
+    </div>
+    <div class="bg-[#FFFFFF] border border-[#E9E6DD] rounded-2xl p-6" style="border-left:4px solid #8A8B85">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-base text-[#8A8B85]">Último análisis</span>
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 text-[#8A8B85]" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zM12.75 6a.75.75 0 00-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 000-1.5h-3.75V6z" clip-rule="evenodd"/></svg>
+      </div>
+      <div class="text-base font-mono font-semibold text-[#8A8B85]">{last}</div>
+      <div class="text-sm text-[#8A8B85] mt-1">GMT-3 Mendoza</div>
     </div>
   </div>
 
   {filter_bar_html}
-  <div class="table-wrapper">
+
+  <div class="overflow-x-auto rounded-2xl border border-[#E9E6DD]">
     <table>
       <thead>
-        <tr>
-          <th>Usuario</th>
-          <th>Riesgo</th>
-          <th>Categoría de ataque</th>
-          <th>Técnica MITRE</th>
-          <th>Score</th>
-          <th>Lifecycle</th>
-          <th>Acción</th>
-          <th>Alerta</th>
-          <th>Último mensaje</th>
-          <th>Detalle</th>
+        <tr class="bg-[#FFFFFF] border-b border-[#E9E6DD]">
+          <th class="text-left text-sm uppercase tracking-wider text-[#8A8B85] py-4 px-4 whitespace-nowrap">Usuario</th>
+          <th class="text-left text-sm uppercase tracking-wider text-[#8A8B85] py-4 px-4 whitespace-nowrap">Riesgo</th>
+          <th class="text-left text-sm uppercase tracking-wider text-[#8A8B85] py-4 px-4 whitespace-nowrap">Categoría</th>
+          <th class="text-left text-sm uppercase tracking-wider text-[#8A8B85] py-4 px-4 whitespace-nowrap">MITRE</th>
+          <th class="text-center text-sm uppercase tracking-wider text-[#8A8B85] py-4 px-4 whitespace-nowrap">Score</th>
+          <th class="text-left text-sm uppercase tracking-wider text-[#8A8B85] py-4 px-4 whitespace-nowrap">Lifecycle</th>
+          <th class="text-left text-sm uppercase tracking-wider text-[#8A8B85] py-4 px-4 whitespace-nowrap">Acción</th>
+          <th class="text-center text-sm uppercase tracking-wider text-[#8A8B85] py-4 px-4 whitespace-nowrap">Alerta</th>
+          <th class="text-left text-sm uppercase tracking-wider text-[#8A8B85] py-4 px-4 whitespace-nowrap">Último msg</th>
+          <th class="text-left text-sm uppercase tracking-wider text-[#8A8B85] py-4 px-4 whitespace-nowrap">Detalle</th>
         </tr>
       </thead>
       <tbody>
@@ -616,31 +584,34 @@ thead th {{
 
 <script>
 (function () {{
-  var secs = 30;
+  var total = 30;
+  var secs = total;
   var el = document.getElementById('cd');
+  var bar = document.getElementById('progress-bar');
   setInterval(function () {{
     secs--;
-    if (secs <= 0) secs = 30;
+    if (secs <= 0) secs = total;
     el.textContent = secs;
+    bar.style.width = (secs / total * 100) + '%';
   }}, 1000);
 }})();
 
 function toggleDetail(i) {{
   var row = document.getElementById('detail-' + i);
-  var btn = document.getElementById('btn-' + i);
+  var chevron = document.getElementById('chevron-' + i);
   if (row.style.display === 'none') {{
     row.style.display = '';
-    btn.textContent = '▲ Cerrar';
+    chevron.style.transform = 'rotate(180deg)';
   }} else {{
     row.style.display = 'none';
-    btn.textContent = '▼ Ver';
+    chevron.style.transform = '';
   }}
 }}
 
 async function _accion(endpoint, btn, labelOk, labelErr) {{
-  var original = btn.textContent;
+  var original = btn.innerHTML;
   btn.disabled = true;
-  btn.textContent = '⏳ Enviando...';
+  btn.innerHTML = '⏳ Enviando...';
   try {{
     var r = await fetch(endpoint, {{
       method: 'POST',
@@ -649,22 +620,22 @@ async function _accion(endpoint, btn, labelOk, labelErr) {{
     }});
     var data = await r.json();
     if (data.ok) {{
-      btn.textContent = '✅ ' + (data.message || labelOk);
+      btn.innerHTML = '✅ ' + (data.message || labelOk);
       btn.classList.add('success');
     }} else {{
-      btn.textContent = '❌ ' + (data.message || labelErr);
+      btn.innerHTML = '❌ ' + (data.message || labelErr);
       btn.classList.add('error');
       setTimeout(function() {{
-        btn.textContent = original;
+        btn.innerHTML = original;
         btn.classList.remove('error');
         btn.disabled = false;
       }}, 4000);
     }}
   }} catch(e) {{
-    btn.textContent = '❌ Error de red';
+    btn.innerHTML = '❌ Error de red';
     btn.classList.add('error');
     setTimeout(function() {{
-      btn.textContent = original;
+      btn.innerHTML = original;
       btn.classList.remove('error');
       btn.disabled = false;
     }}, 4000);
@@ -681,72 +652,82 @@ function accionNotificar(btn) {{
 
 def _render_login(error: str = "") -> str:
     error_html = (
-        f'<div class="login-error">{_e(error)}</div>' if error else ""
-    )
+        f'<div class="mb-5 flex items-center gap-3 rounded-xl border border-[#C2554B] bg-[#FEF2F2] px-4 py-3 text-base text-[#C2554B]">'
+        f'<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>'
+        f'{_e(error)}</div>'
+    ) if error else ""
     return f"""<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Link Seguro — Login</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
 <style>
-* {{ margin:0; padding:0; box-sizing:border-box; }}
-body {{
-  background:#0f0f0f; color:#e0e0e0;
-  font-family:'Courier New',Courier,monospace;
-  min-height:100vh; display:flex; align-items:center; justify-content:center;
-}}
-.login-box {{
-  background:#131313; border:1px solid #232323; border-radius:8px;
-  padding:38px 34px; width:100%; max-width:380px;
-}}
-.login-title {{
-  color:#00ff88; font-size:1.25rem; letter-spacing:1px;
-  margin-bottom:6px; text-align:center;
-}}
-.login-sub {{
-  color:#555; font-size:0.78rem; text-align:center; margin-bottom:26px;
-}}
-.field {{ margin-bottom:16px; }}
-.field label {{
-  display:block; font-size:0.7rem; color:#666;
-  text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;
-}}
-.field input {{
-  width:100%; padding:10px 12px; background:#0a0a0a;
-  border:1px solid #2a2a2a; border-radius:4px;
-  color:#e0e0e0; font-family:inherit; font-size:0.88rem;
-}}
-.field input:focus {{ outline:none; border-color:#00ff88; }}
-.btn-submit {{
-  width:100%; padding:11px; margin-top:8px;
-  background:#0a1a0a; border:1px solid #00ff88; color:#00ff88;
-  border-radius:4px; cursor:pointer; font-family:inherit;
-  font-size:0.88rem; letter-spacing:1px;
-}}
-.btn-submit:hover {{ background:#00ff88; color:#000; }}
-.login-error {{
-  background:#2d0000; border:1px solid #ff4444; color:#ff4444;
-  padding:9px 12px; border-radius:4px; font-size:0.78rem;
-  margin-bottom:16px; text-align:center;
-}}
+  body {{ font-family: 'Inter', sans-serif; }}
+  .mono {{ font-family: 'JetBrains Mono', monospace; }}
+  input:focus {{ outline: none; border-color: #6E8F73 !important; box-shadow: 0 0 0 2px rgba(110,143,115,0.25); }}
 </style>
 </head>
-<body>
-  <form class="login-box" method="post" action="/login">
-    <div class="login-title">&#x1F6E1;&#xFE0F; Link Seguro</div>
-    <div class="login-sub">Dashboard de phishing</div>
+<body class="min-h-screen bg-[#ECEAE3] flex items-center justify-center px-4">
+  <form method="post" action="/login" class="w-full max-w-md bg-[#FFFFFF] border border-[#E9E6DD] rounded-2xl shadow-2xl p-10">
+
+    <div class="flex flex-col items-center mb-8">
+      <img src="/static/logo.png" alt="Link Seguro" class="h-40 w-auto mb-2 drop-shadow-sm">
+      <p class="text-base text-[#8A8B85] mt-1">Sistema de detección de phishing</p>
+    </div>
+
     {error_html}
-    <div class="field">
-      <label for="username">Usuario o email</label>
-      <input id="username" name="username" type="text" required autofocus autocomplete="username" placeholder="usuario o correo electrónico">
+
+    <div class="mb-5">
+      <label for="username" class="block text-base font-medium text-[#1B1D1C] mb-2">Usuario o email</label>
+      <input id="username" name="username" type="text" required autofocus autocomplete="username"
+        placeholder="usuario o correo electrónico"
+        class="w-full text-lg py-3 px-4 rounded-xl bg-[#F7F5EE] border border-[#E9E6DD] text-[#1B1D1C] placeholder-[#8A8B85] transition-colors">
     </div>
-    <div class="field">
-      <label for="password">Contraseña</label>
-      <input id="password" name="password" type="password" required autocomplete="current-password">
+
+    <div class="mb-6">
+      <label for="password" class="block text-base font-medium text-[#1B1D1C] mb-2">Contraseña</label>
+      <div class="relative">
+        <input id="password" name="password" type="password" required autocomplete="current-password"
+          placeholder="••••••••"
+          class="w-full text-lg py-3 px-4 pr-12 rounded-xl bg-[#F7F5EE] border border-[#E9E6DD] text-[#1B1D1C] placeholder-[#8A8B85] transition-colors">
+        <button type="button" onclick="togglePwd()" class="absolute inset-y-0 right-0 px-4 text-[#8A8B85] hover:text-[#1B1D1C]" tabindex="-1">
+          <svg id="eye-show" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
+            <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/>
+          </svg>
+          <svg id="eye-hide" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 hidden" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clip-rule="evenodd"/>
+            <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.064 7 9.542 7 .847 0 1.669-.105 2.454-.303z"/>
+          </svg>
+        </button>
+      </div>
     </div>
-    <button type="submit" class="btn-submit">Ingresar</button>
+
+    <button type="submit"
+      class="w-full text-lg py-3 font-semibold rounded-xl bg-[#6E8F73] hover:bg-[#5A7A5E] text-white cursor-pointer transition-colors">
+      Ingresar
+    </button>
   </form>
+
+  <script>
+  function togglePwd() {{
+    var inp = document.getElementById('password');
+    var show = document.getElementById('eye-show');
+    var hide = document.getElementById('eye-hide');
+    if (inp.type === 'password') {{
+      inp.type = 'text';
+      show.classList.add('hidden');
+      hide.classList.remove('hidden');
+    }} else {{
+      inp.type = 'password';
+      show.classList.remove('hidden');
+      hide.classList.add('hidden');
+    }}
+  }}
+  </script>
 </body>
 </html>"""
 
