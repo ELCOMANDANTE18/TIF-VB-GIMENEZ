@@ -18,11 +18,15 @@ TIMEOUT_SECONDS = 5.0
 
 def _build_alert_message(explanation: str, categoria: str) -> str:
     return (
-        f"⚠️ Link Seguro detectó que este mensaje "
-        f"podría ser un intento de {categoria}.\n\n"
-        f"{explanation}\n\n"
-        "Este mensaje fue analizado automáticamente "
-        "por un sistema de seguridad."
+        "⚠️ AVISO AUTOMÁTICO DE SEGURIDAD\n\n"
+        "Este es un mensaje generado automáticamente "
+        "por Link Seguro, un sistema de detección de phishing.\n\n"
+        f"Se identificó que este mensaje podría ser un intento de {categoria}.\n\n"
+        "Por favor no continúes con esta conversación si recibiste una solicitud "
+        "de datos personales, contraseñas o dinero.\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "Link Seguro · Mensaje automático\n"
+        "No responder a este mensaje."
     )
 
 
