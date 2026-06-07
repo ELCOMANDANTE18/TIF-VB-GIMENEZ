@@ -199,6 +199,44 @@ async def ya_fue_respondido(id_conversacion: str) -> bool:
     return bool(row[0]) if row else False
 
 
+async def update_username_if_missing(
+    id_conversacion: str,
+    participante_id: str,
+    token: str,
+) -> str:
+    try:
+        async with aiosqlite.connect(get_db_path()) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(
+                "SELECT participante_username FROM conversacion WHERE id_conversacion = ?",
+                (id_conversacion,),
+            )
+            row = await cur.fetchone()
+            if row and row["participante_username"]:
+                return row["participante_username"]
+
+        import httpx
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(
+                f"https://graph.instagram.com/v25.0/{participante_id}",
+                params={"fields": "username,name", "access_token": token},
+            )
+        if resp.status_code == 200:
+            data = resp.json()
+            username = data.get("username") or data.get("name") or ""
+            if username:
+                async with aiosqlite.connect(get_db_path()) as db:
+                    await db.execute(
+                        "UPDATE conversacion SET participante_username = ? WHERE id_conversacion = ?",
+                        (username, id_conversacion),
+                    )
+                    await db.commit()
+                return username
+    except Exception:
+        pass
+    return f"...{participante_id[-8:]}"
+
+
 async def es_cuenta_propia(ig_user_id: str) -> bool:
     """True si el ig_user_id pertenece a una cuenta activamente monitoreada (flia_test, benja).
     Exluye cuentas de prueba como hernesto que solo envían mensajes de test."""

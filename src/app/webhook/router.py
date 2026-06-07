@@ -4,7 +4,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
 
 from app.analysis.orchestrator import PhishingOrchestrator
 from app.config import settings
-from app.db.sqlite_client import save_message, es_cuenta_propia
+from app.db.sqlite_client import save_message, es_cuenta_propia, update_username_if_missing
 from app.models.schemas import RiskLevel
 from app.utils.logger import get_logger
 from app.webhook.validator import verify_signature
@@ -105,5 +105,9 @@ async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
                 background_tasks.add_task(
                     _analyze_and_log, sender_id, text, recipient_id, message_id, conv_id
                 )
+                if conv_id and settings.FLIA_TEST_TOKEN:
+                    background_tasks.add_task(
+                        update_username_if_missing, conv_id, sender_id, settings.FLIA_TEST_TOKEN
+                    )
 
     return {"status": "ok"}
