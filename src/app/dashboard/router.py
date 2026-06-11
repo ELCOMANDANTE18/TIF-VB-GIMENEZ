@@ -440,7 +440,7 @@ def render_html(
 
     filter_bar_html = ""
     if user.get("es_admin") and usuarios_list:
-        all_cls = ("border-[#6E8F73] text-[#6E8F73] bg-[#E8F3EA] font-bold"
+        all_cls = ("border-[#7A95C2] text-[#4A6A99] bg-[#C9D6E8] font-bold"
                    if not filtro_activo
                    else "border-[#E9E6DD] text-[#8A8B85]")
         btns = [
@@ -451,7 +451,7 @@ def render_html(
             ig = u.get("ig_username") or ""
             if not ig:
                 continue
-            act_cls = ("border-[#6E8F73] text-[#6E8F73] bg-[#E8F3EA] font-bold"
+            act_cls = ("border-[#7A95C2] text-[#4A6A99] bg-[#C9D6E8] font-bold"
                        if ig == filtro_activo
                        else "border-[#E9E6DD] text-[#8A8B85]")
             btns.append(
@@ -667,7 +667,7 @@ def _render_login(error: str = "") -> str:
 <style>
   body {{ font-family: 'Inter', sans-serif; }}
   .mono {{ font-family: 'JetBrains Mono', monospace; }}
-  input:focus {{ outline: none; border-color: #6E8F73 !important; box-shadow: 0 0 0 2px rgba(110,143,115,0.25); }}
+  input:focus {{ outline: none; border-color: #7A95C2 !important; box-shadow: 0 0 0 2px rgba(122,149,194,0.25); }}
 </style>
 </head>
 <body class="min-h-screen bg-[#ECEAE3] flex items-center justify-center px-4">
@@ -707,7 +707,7 @@ def _render_login(error: str = "") -> str:
     </div>
 
     <button type="submit"
-      class="w-full text-lg py-3 font-semibold rounded-xl bg-[#6E8F73] hover:bg-[#5A7A5E] text-white cursor-pointer transition-colors">
+      class="w-full text-lg py-3 font-semibold rounded-xl bg-[#7A95C2] hover:bg-[#4A6A99] text-white cursor-pointer transition-colors">
       Ingresar
     </button>
   </form>
