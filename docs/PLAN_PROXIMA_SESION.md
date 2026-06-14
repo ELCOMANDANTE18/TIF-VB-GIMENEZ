@@ -1,6 +1,6 @@
 # Plan de acción — Próxima sesión
-**Generado:** 2026-06-14  
-**Estado al cierre:** commit `755ea16` — branch `main`
+**Generado:** 2026-06-14 (actualizado post-sesión)  
+**Estado al cierre:** commit `3c9c548` — branch `main`
 
 ---
 
@@ -10,7 +10,8 @@
 
 ```
 Score global: 11/12 (92%)
-Casos fallidos: TC08 (normal_after_phishing — decisión de diseño documentada)
+Casos fallidos: TC08 (normal_after_phishing — el modelo IA prioriza la URL
+                 de phishing en el historial sobre la retractación)
 
 Clase      Precision    Recall    F1-score
 ------------------------------------------
@@ -25,337 +26,57 @@ Macro        94.44%     94.44%     93.94%
 
 | Hash | Qué |
 |------|-----|
-| `3ad6d11` | feat(rag): mejora iterativa — Macro F1 72.86%→93.94% (11/12) |
-| `ec5c20d` | feat(rag): vocabulario rioplatense + calibración siempre presente |
-| `755ea16` | docs(auditoria): PARTE 9 — corpus rioplatense y calibración |
+| `fd112c6` | feat(corpus/rag): fichas NIST/OWASP + retraction_cover + extra_context |
+| `3c9c548` | docs(readme): actualizar metricas 11/12 (93.94% Macro F1) y corpus 16 fichas |
 
 ### Qué quedó funcionando y verificado
 
-- `evaluar_dataset.py` llama correctamente al retriever RAG ✓
-- `severity_calibration` se inyecta en el 100% de los prompts ✓
-- 13 fichas en el corpus, 4 con vocabulario rioplatense ampliado ✓
-- `text_analyzer.py`: `credential_request` captura "confirmanos/verificar + titular/identidad" ✓
-- `retriever.py`: normalización de tildes activa ✓
-- Servidor: `uvicorn app.main:app` arranca sin errores (verificado en sesiones previas) ✓
+- **Tarea A completada** — 3 fichas NIST/OWASP agregadas al corpus ✓
+  - `nist_otp_protection`: recuperada correctamente en TC07 ✓
+  - `owasp_pretexting`: recuperada correctamente en TC09 ✓
+  - `owasp_urgency_bypass`: recuperada correctamente en TC12 ✓
+- **Tarea B completada (parcial)** — infraestructura lista, TC08 no se resuelve ✓
+  - `extra_context` en `retrieve()` — retrocompatible (default `""`) ✓
+  - Orchestrator y evaluador pasan `history[-1]` como contexto extra ✓
+  - Ficha `retraction_cover` en corpus, se recupera en TC08 ✓
+  - El modelo UM Cloud (95% confianza) igual clasifica HIGH por la URL del historial
+- 16 fichas en el corpus (7 ataque + 2 MITRE + 2 Cialdini + 1 calibración + 4 nuevas) ✓
+- Servidor arranca sin errores ✓
+- 15 rutas registradas ✓
 - Tokens de Instagram activos: `@fliagimenez2026` y `@gimenezbenja2` ✓
 - Dashboard: 890 líneas en `router.py` — HTML en f-strings, funciona pero es deuda técnica
 
 ---
 
-## SECCIÓN 2 — Tarea A: Fichas NIST + OWASP
+## SECCIÓN 2 — Tareas completadas en esta sesión
 
-### Objetivo
+### ✅ Tarea A: Fichas NIST + OWASP (COMPLETADA)
 
-Agregar 3 fichas nuevas al corpus basadas en marcos de referencia reconocidos. Esto enriquece el contexto del modelo y da evidencia académica para el informe (sección de fundamentos teóricos).
+3 fichas agregadas a `app/rag/corpus.py:296-411` (bloque `# ── MARCOS NORMATIVOS`):
+- `nist_otp_protection` — NIST SP 800-63B (OTP protection)
+- `owasp_pretexting` — OWASP Pretexting
+- `owasp_urgency_bypass` — OWASP Artificial Time Pressure
 
-### Cómo agregar: al final de `app/rag/corpus.py`, antes del `]` de cierre, en un bloque:
-
-```python
-    # ── MARCOS NORMATIVOS ─────────────────────────────────────────────────────
-```
-
----
-
-### Ficha A1 — `nist_otp_protection`
-
-**Fuente:** NIST SP 800-63B (Digital Identity Guidelines — Authentication and Lifecycle Management), Sección 5.2.3 "Out-of-Band Authenticators" y Sección 5.1.3.2.
-
-**Principio clave:** *"Verifiers SHALL NOT prompt subscribers to provide an authentication secret to any party other than the verifier."* — ningún servicio legítimo pide el código OTP a través del canal de mensajería.
-
-```python
-{
-    "id": "nist_otp_protection",
-    "title": "NIST 800-63B — Ningún verificador legítimo pide OTP por DM",
-    "keywords": [
-        "mandame el código", "pasame el código", "reenvíame el código",
-        "código que te llegó", "es solo 6 números", "me llegó un código",
-        "código de verificación", "código de seguridad",
-        "te lo mandé por error", "necesito que me lo reenvíes",
-        "otp", "2fa", "doble factor", "autenticación",
-    ],
-    "content": (
-        "MARCO: NIST SP 800-63B §5.2.3 establece que ningún verificador "
-        "legítimo solicitará el código OTP/2FA al usuario a través de un "
-        "canal de mensajería. Instagram, Meta y cualquier plataforma legítima "
-        "NUNCA piden el código que le llegó por SMS al usuario en un DM.\n"
-        "ATAQUE: el atacante solicita que la víctima reenvíe el código "
-        "de verificación bajo pretextos ('te lo mandé por error', 'necesito "
-        "verificar tu identidad'). Con el código obtiene acceso inmediato.\n"
-        "CLASIFICACIÓN AUTOMÁTICA: cualquier mensaje pidiendo un código de "
-        "verificación recibido por SMS es HIGH risk independientemente del "
-        "pretexto — no existe escenario legítimo para esta solicitud.\n"
-        "FASE: hook directo. MITRE: T1566.003."
-    ),
-},
-```
-
-**Relación con fichas existentes:** refuerza `otp_request` con fundamento normativo explícito. Las keywords se solapan intencionalmente para aumentar el score del retriever en casos OTP.
+**Verificación:** `evaluar_dataset.py` → 11/12 (92%), sin regresiones. Las fichas se recuperan correctamente en TC07, TC09 y TC12.
 
 ---
 
-### Ficha A2 — `owasp_pretexting`
+### ✅ Tarea B: Ficha de retractación (TC08) — COMPLETADA (con nota)
 
-**Fuente:** OWASP Social Engineering Prevention Cheat Sheet (https://cheatsheetseries.owasp.org/cheatsheets/Social_Engineering_Prevention_Cheat_Sheet.html), sección "Pretexting"; y OWASP Testing Guide v4.2, WSTG-IDNT-05 (Testing for Account Enumeration and Guessable User Account).
+**Cambios aplicados a 4 archivos:**
+- `app/rag/retriever.py:14` — nuevo parámetro `extra_context` (default `""`)
+- `app/rag/retriever.py:29-31` — si hay `extra_context`, se agrega a `search_parts`
+- `app/analysis/orchestrator.py:95` — pasa `history[-1]["texto"]` como `extra_context`
+- `scripts/evaluar_dataset.py:120` — idem para la evaluación
+- `app/rag/corpus.py:412-432` — ficha `retraction_cover`
 
-**Principio clave:** pretexting = creación de un escenario fabricado de autoridad para manipular al objetivo. Es la técnica subyacente de `account_verification_scam` y `brand_support_impersonation`.
+**Resultado:** el RAG recupera correctamente `retraction_cover` en TC08, pero el modelo UM Cloud (95% confianza) clasifica HIGH porque ve la URL `portal-bradesco.digital` en el historial de la conversación. La infraestructura queda lista — el issue es del modelo, no del pipeline.
 
-```python
-{
-    "id": "owasp_pretexting",
-    "title": "OWASP — Pretexting: escenario fabricado de autoridad",
-    "keywords": [
-        "somos el equipo", "somos del equipo", "equipo de seguridad",
-        "equipo de soporte", "instagram support", "meta support",
-        "detectamos", "identificamos", "hemos notado", "hemos detectado",
-        "actividad inusual", "actividad sospechosa", "movimientos extraños",
-        "violación de términos", "infracción de política", "copyright",
-        "derechos de autor", "tu cuenta está en riesgo",
-        "necesitamos verificar", "debés verificar",
-        "support_impersonation",
-    ],
-    "content": (
-        "MARCO: OWASP Social Engineering Prevention — Pretexting. Técnica "
-        "donde el atacante fabrica un escenario de autoridad creíble para "
-        "que la víctima cumpla una solicitud que normalmente rechazaría.\n"
-        "PATRÓN EN INSTAGRAM DMs: el atacante se presenta como soporte de "
-        "Instagram/Meta, alega un problema inventado (violación de política, "
-        "actividad inusual, infracción de derechos de autor) y exige una "
-        "acción urgente para 'resolver' el problema.\n"
-        "INDICADORES: claim de ser equipo oficial + problema fabricado + "
-        "urgencia + solicitud de acción (clic en link, confirmar identidad, "
-        "enviar código). Instagram NUNCA contacta usuarios por DM.\n"
-        "SEVERIDAD: MEDIUM si falta el link/código, HIGH si incluye alguno.\n"
-        "FASE: hook → pressure. MITRE: T1566.003."
-    ),
-},
-```
-
-**Relación con fichas existentes:** complementa `account_verification_scam` y `brand_support_impersonation` con mayor cobertura de keywords de "detección" y vocabulario de autoridad fabricada.
+**Documentado como trabajo futuro** en `AUDITORIA_REPO.md` PARTE 9.4.
 
 ---
 
-### Ficha A3 — `owasp_urgency_bypass`
-
-**Fuente:** OWASP Social Engineering Prevention Cheat Sheet, sección "Creating Urgency / Artificial Time Pressure"; y NIST SP 800-63B Sección 10.2 (Usability Considerations — nota sobre presión temporal como señal de ataque).
-
-**Principio clave:** la urgencia artificial es una de las técnicas más documentadas de ingeniería social. Su función es desactivar el pensamiento crítico de la víctima.
-
-```python
-{
-    "id": "owasp_urgency_bypass",
-    "title": "OWASP — Presión temporal artificial: bypass del pensamiento crítico",
-    "keywords": [
-        "urgency", "urgente", "inmediatamente", "ahora mismo",
-        "sin demora", "a la brevedad", "cuanto antes",
-        "24 horas", "48 horas", "horas para responder",
-        "vence", "expira", "se cierra", "último aviso",
-        "tu cuenta será eliminada", "dado de baja", "inhabilitada",
-        "perdés acceso", "perderás tu cuenta", "acción requerida",
-        "tiempo limitado", "no hay tiempo",
-    ],
-    "content": (
-        "MARCO: OWASP Social Engineering — Urgency/Artificial Time Pressure. "
-        "La creación de plazos artificiales es una táctica documentada para "
-        "impedir que la víctima consulte con otros o verifique la legitimidad "
-        "del mensaje antes de actuar.\n"
-        "SEÑALES EN INSTAGRAM DMs: deadlines específicos ('24 horas', '48 horas'), "
-        "amenazas de consecuencias irreversibles ('tu cuenta será eliminada "
-        "permanentemente', 'perderás acceso a tus fotos'), llamadas a acción "
-        "inmediata ('actuá ya', 'respondé ahora mismo').\n"
-        "REGLA DE CALIBRACIÓN: la urgencia SOLA sin link ni código → MEDIUM. "
-        "Urgencia + link externo o solicitud de código → HIGH.\n"
-        "Las plataformas legítimas siempre dan tiempo razonable para actuar "
-        "y envían notificaciones por múltiples canales, nunca solo por DM.\n"
-        "FASE: pressure. Principio Cialdini: urgency/scarcity."
-    ),
-},
-```
-
-**Relación con fichas existentes:** complementa `cialdini_urgency_scarcity` con vocabulario rioplatense extendido y fundamentación OWASP. La regla de calibración MEDIUM/HIGH dentro del contenido refuerza `severity_calibration`.
-
----
-
-### Procedimiento exacto para agregar las fichas
-
-En `src/app/rag/corpus.py`, al final del array `CORPUS`, después de la ficha `severity_calibration` y antes del `]` de cierre:
-
-```python
-    # ── MARCOS NORMATIVOS ─────────────────────────────────────────────────────
-    { ... ficha A1 ... },
-    { ... ficha A2 ... },
-    { ... ficha A3 ... },
-]
-```
-
-Luego ejecutar:
-```bash
-cd src
-.venv/bin/python scripts/evaluar_dataset.py
-```
-
-**Expectativa:** 11/12 (sin regresiones). Las fichas no deberían bajar ningún caso porque:
-- TC01 (benign): ninguna keyword matchea → sin cambio
-- TC02-TC07 (HIGH): refuerzan señales ya correctas → sin cambio
-- TC08 (MEDIUM/fallo): el mensaje actual "Cómo te va?" no matchea ninguna nueva keyword → sin cambio
-- TC09-TC12 (MEDIUM): keywords de `owasp_pretexting` podrían mejorar la señal para TC09
-
----
-
-## SECCIÓN 3 — Tarea B: Ficha de retractación (TC08)
-
-### Diagnóstico (de AUDITORIA_REPO.md PARTE 9.4)
-
-- **TC08:** `history = ["Verificá tu cuenta: http://portal-bradesco.digital/", "Igual eso lo mandé sin querer, borralo"]`, `current = "Cómo te va? Nos vemos el finde?"`
-- El retriever solo busca en `current_message + url_reasons + text_patterns`. Las keywords de retractación ("borralo", "lo mandé sin querer") están en `history[-1]`, no en el mensaje actual.
-- El modelo ve la URL de phishing en el historial → devuelve HIGH al 98%.
-
----
-
-### Cambio 1 — `app/rag/retriever.py`
-
-Agregar el parámetro `extra_context` a `retrieve()`:
-
-```python
-# ANTES (línea 12):
-def retrieve(
-    message: str,
-    url_reasons: list[str] | None = None,
-    text_patterns: list[str] | None = None,
-    top_k: int = 2,
-) -> str:
-
-# DESPUÉS:
-def retrieve(
-    message: str,
-    url_reasons: list[str] | None = None,
-    text_patterns: list[str] | None = None,
-    extra_context: str = "",
-    top_k: int = 2,
-) -> str:
-```
-
-Y en el cuerpo (línea 27):
-```python
-# ANTES:
-search_parts = [message] + url_reasons + text_patterns
-
-# DESPUÉS:
-search_parts = [message] + url_reasons + text_patterns
-if extra_context:
-    search_parts.append(extra_context)
-```
-
-**Impacto en otros casos:** el parámetro tiene default `""` → retrocompatible. En `evaluar_dataset.py` no se pasa (por ahora), solo desde `orchestrator.py`.
-
----
-
-### Cambio 2 — `app/analysis/orchestrator.py`
-
-En las líneas 90-99 (ya identificadas), cambiar la llamada a `retrieve()`:
-
-```python
-# ANTES (líneas 95-99):
-retrieved_context = retrieve(
-    message=text,
-    url_reasons=url_result.reasons,
-    text_patterns=text_result.patterns_matched,
-)
-
-# DESPUÉS — agregar último mensaje del historial como contexto extra:
-last_history_text = history[-1]["texto"] if history else ""
-retrieved_context = retrieve(
-    message=text,
-    url_reasons=url_result.reasons,
-    text_patterns=text_result.patterns_matched,
-    extra_context=last_history_text,
-)
-```
-
-`history` ya está disponible en el scope (líneas 90-93). No hay import nuevo necesario.
-
----
-
-### Ficha nueva — `retraction_cover`
-
-Agregar en `corpus.py` dentro del bloque de marcos normativos:
-
-```python
-{
-    "id": "retraction_cover",
-    "title": "Retractación post-phishing — táctica de cobertura",
-    "keywords": [
-        "borralo", "borrar", "lo mandé sin querer", "fue un error",
-        "me equivoqué", "no era para vos", "ignoralo", "olvidalo",
-        "mandé mal", "te lo mandé por error", "no le des bola",
-        "disculpá", "perdón por el mensaje", "ignorá ese link",
-    ],
-    "content": (
-        "PATRÓN — RETRACTACIÓN POST-PHISHING: el atacante envía contenido "
-        "malicioso (link, solicitud de OTP, pedido de datos) y luego se "
-        "retracta ('fue un error', 'borralo', 'no era para vos'). Esta es "
-        "una táctica estándar usada cuando la víctima no respondió o para "
-        "bajar la guardia antes de un segundo intento.\n"
-        "DECISIÓN DE CLASIFICACIÓN: mantener el riesgo en al menos MEDIUM. "
-        "La retractación no invalida el intento previo — un atacante real "
-        "diría exactamente lo mismo que alguien que genuinamente se equivocó.\n"
-        "ACCIÓN: el operador humano debe revisar el historial completo y "
-        "decidir si la retractación es genuina. No desescalar a LOW de forma "
-        "automática.\n"
-        "FASE: puede aparecer en cualquier etapa. MITRE: T1566.002/003."
-    ),
-},
-```
-
----
-
-### Cambio 3 — `scripts/evaluar_dataset.py`
-
-Para que el script de evaluación también use el historial al recuperar contexto RAG (así TC08 se beneficia del cambio en el test):
-
-```python
-# ANTES (líneas ~119-125):
-retrieved_context = retrieve(
-    message=current_msg,
-    url_reasons=url_result.reasons,
-    text_patterns=text_result.patterns_matched,
-)
-
-# DESPUÉS — agregar último mensaje del historial:
-last_history_text = history[-1]["texto"] if history else ""
-retrieved_context = retrieve(
-    message=current_msg,
-    url_reasons=url_result.reasons,
-    text_patterns=text_result.patterns_matched,
-    extra_context=last_history_text,
-)
-```
-
----
-
-### Análisis de riesgo — casos TC01-TC12 con URLs en historial
-
-| ID | URL en historial | `history[-1]` pasado como extra_context | Riesgo de regresión |
-|----|-----------------|----------------------------------------|---------------------|
-| TC01 | No | "Todo bien y vos?" | Ninguno — sin keywords |
-| TC02 | No (URL en msg actual) | "Tu cuenta fue reportada..." | Bajo — refuerza HIGH existente |
-| TC03 | No (URL en msg actual) | "Tenés 24 horas para apelar..." | Bajo — ya es HIGH, urgency keywords refuerzan |
-| TC04 | No | "Igual me alegra haberme equivocado..." | Ninguno |
-| TC05 | No (URL en msg actual) | "Entrá a plataforma: http://crypto-vip-signals.top/..." | Bajo — ya es HIGH |
-| TC06 | No (URL en msg actual) | "Premio: iPhone 15 Pro. Para reclamarlo..." | Bajo — ya es HIGH |
-| TC07 | No | "Instagram me mandó un código a tu número por error" | Medio — OTP keywords en historial → refuerza HIGH ✓ |
-| **TC08** | **Sí** (`portal-bradesco.digital`) | **"Igual eso lo mandé sin querer, borralo"** | **Objetivo del cambio: retraction_cover → MEDIUM** |
-| TC09 | No | "Detectamos actividad inusual en tu cuenta..." | Bajo — "actividad inusual" en extra_context puede aumentar score de severity_calibration |
-| TC10 | No (URL en msg actual) | "Hola! Vi tu perfil y me pareció genial..." | Ninguno |
-| TC11 | No | "Soy empresaria, viajo mucho. Me dedico a inversiones y cripto..." | Bajo — reinforza pig_butchering, TC11 ya pasa |
-| TC12 | No | "Para coordinar la entrega necesitamos que respondás a la brevedad" | Bajo — reinforza severity_calibration, TC12 ya pasa |
-
-**Conclusión:** el riesgo de regresión es bajo. El único caso con cambio significativo esperado es TC08 (el objetivo). TC09 podría mejorar levemente con más señal. Ejecutar la evaluación completa después del cambio para verificar.
-
-**Impacto esperado si todo funciona:** 12/12 (100%), Macro F1 ~96-97%.
-
----
-
-## SECCIÓN 4 — Tarea C: Migración a Jinja2
+## SECCIÓN 3 — Tarea C (pendiente): Migración a Jinja2
 
 ### Estado actual del router.py (890 líneas)
 
@@ -636,50 +357,36 @@ No se necesita ningún cambio en `main.py` si `Jinja2Templates` se instancia en 
 
 ---
 
-## SECCIÓN 5 — Orden recomendado para la próxima sesión
+## SECCIÓN 4 — Próxima sesión: Tarea C — Migración a Jinja2
 
 ### Fechas de referencia
-- **Sesión de trabajo:** próxima disponible
-- **Demo:** viernes (5 días desde el 2026-06-14)
+- **Sesión de trabajo:** mañana (2026-06-15)
+- **Demo:** viernes (4 días desde hoy)
 
-### Análisis de cada tarea
+### Única tarea pendiente
 
 | Tarea | Riesgo | Tiempo estimado | Si sale mal |
 |-------|--------|-----------------|-------------|
-| **A: Fichas NIST/OWASP** | Muy bajo | 30-45 min | Borrar las 3 fichas del corpus.py, re-evaluar — sin impacto |
-| **B: Ficha de retractación (TC08)** | Bajo | 45-60 min | Revertir retriever.py y orchestrator.py (2 archivos, cambio de 3 líneas cada uno) — métricas vuelven a 93.94% |
 | **C: Migración Jinja2** | Alto | 4-6 horas | El dashboard puede quedar en blanco o con errores de template — requiere rollback completo del router.py y borrar templates/ |
 
-### Orden recomendado
+### Nota sobre el estado actual
+
+Las Tareas A y B están completadas. El sistema está listo para la demo con:
+- **16 fichas** en el corpus RAG (NIST, OWASP, MITRE, Cialdini, calibración)
+- **11/12 (92%)** — TC08 documentado como trabajo futuro
+- **Dashboard funcional** con HTML en f-strings (deuda técnica, no bloqueante)
+
+### Recomendación
 
 ```
-1. Tarea A — Fichas NIST/OWASP (30-45 min)
-   Bajo riesgo, alto valor para el informe (referencias académicas).
-   Verificar: evaluar_dataset.py → debe seguir 11/12 o mejorar.
-   Commit: feat(corpus): fichas NIST 800-63B y OWASP
-
-2. Tarea B — Ficha de retractación TC08 (45-60 min)
-   Riesgo controlado — solo 3 archivos, cambios pequeños.
-   Si funciona: 12/12 (100%), Macro F1 ~96-97% — argumento fuerte para defensa.
-   Verificar: evaluar_dataset.py → esperar PASS en TC08.
-   Commit: feat(rag/orchestrator): retraction fix — TC08 MEDIUM
-
-3. Tarea C — Migración Jinja2 (4-6 horas)
-   Solo si sobra tiempo después de la demo. NO hacer antes del viernes.
-   Es mejora de calidad de código, no de funcionalidad.
-   El sistema funciona perfectamente sin este cambio.
+Tarea C — Migración Jinja2 (4-6 horas)
+  Solo si sobra tiempo después de la demo. NO hacer antes del viernes.
+  Es mejora de calidad de código, no de funcionalidad.
+  El sistema funciona perfectamente sin este cambio (tal como está ahora).
 ```
 
-### Si no da el tiempo para las 3
-
-- **Solo A:** sistema queda con fundamentos académicos sólidos + métricas 93.94%. Suficiente para la defensa.
-- **A + B:** sistema perfecto en métricas (100% si funciona). El argumento de "trabajo futuro" para TC08 se convierte en "resuelto". Ideal para la defensa.
-- **A + B + C:** código limpio y mantenible. Solo si la demo no es el viernes o si hay más de un día disponible.
-
-### Criterio de corte: si Tarea B tarda más de 90 minutos, parar y documentar como trabajo futuro
-
-El cambio de TC08 puede ser que el modelo no baje a MEDIUM incluso con la nueva ficha (el modelo tiene 98% de confianza en HIGH). En ese caso: revertir, documentar el intento y el resultado, y usar el argumento de trabajo futuro documentado en PARTE 9.4 de AUDITORIA_REPO.md.
+La migración está detallada paso a paso en la **Sección 3** de este documento (pasos 1-5, templates, checklist). Seguir ese orden.
 
 ---
 
-*Documento generado 2026-06-14. Estado del sistema al cierre: commit `755ea16`, 11/12 (92%), Macro F1 93.94%.*
+*Documento actualizado 2026-06-14. Estado del sistema al cierre: commit `3c9c548`, 11/12 (92%), Macro F1 93.94%. Push enviado a `origin/main`.*
