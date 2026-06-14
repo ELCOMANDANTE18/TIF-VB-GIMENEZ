@@ -4,7 +4,8 @@ from app.models.schemas import TextResult
 
 _PATTERNS: dict[str, re.Pattern[str]] = {
     "credential_request": re.compile(
-        r'(send|share|provide|enter|give).{0,30}(password|contraseña|pin|credentials|usuario|user|pass)',
+        r'(send|share|provide|enter|give|confirm|confirmar|confirmanos|verificar|verificá).{0,30}'
+        r'(password|contraseña|pin|credentials|usuario|user|pass|titular|identidad)',
         re.IGNORECASE,
     ),
     "urgency": re.compile(

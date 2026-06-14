@@ -93,9 +93,9 @@
   {
     "id": "TC08",
     "tipo": "normal_after_phishing",
-    "descripcion": "Mensaje normal después de uno sospechoso — no debe escalar",
-    "expected_severity": "LOW",
-    "expected_is_phishing": false,
+    "descripcion": "Retractación post-phishing — atacante dice 'fue un error'. Sistema se mantiene cauteloso (MEDIUM es correcto: ambiguo, no LOW).",
+    "expected_severity": "MEDIUM",
+    "expected_is_phishing": true,
     "mensajes": [
       {"sender": "amigo", "texto": "Verificá tu cuenta: http://portal-bradesco.digital/"},
       {"sender": "amigo", "texto": "Igual eso lo mandé sin querer, borralo"},

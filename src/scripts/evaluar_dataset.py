@@ -20,6 +20,7 @@ from app.ai import groq_client
 from app.analysis.url_analyzer import URLAnalyzer
 from app.analysis.text_analyzer import TextAnalyzer
 from app.config import settings
+from app.rag.retriever import retrieve
 
 DATASET_PATH = Path(__file__).parent.parent / "tests" / "dataset_evaluacion.json"
 
@@ -115,6 +116,13 @@ async def run_case(case: dict, url_analyzer: URLAnalyzer, text_analyzer: TextAna
 
     heuristic = heuristic_risk(url_result.score, text_result.score)
 
+    # RAG: recuperar contexto de conocimiento relevante para el mensaje actual
+    retrieved_context = retrieve(
+        message=current_msg,
+        url_reasons=url_result.reasons,
+        text_patterns=text_result.patterns_matched,
+    )
+
     # Análisis IA
     ai_result = {}
     ai_error = None
@@ -126,6 +134,7 @@ async def run_case(case: dict, url_analyzer: URLAnalyzer, text_analyzer: TextAna
             text_score=text_result.score,
             reasons=url_result.reasons + text_result.patterns_matched,
             conversation_id=case["id"],
+            retrieved_context=retrieved_context,
         )
     except Exception as exc:
         ai_error = str(exc)
@@ -148,6 +157,7 @@ async def run_case(case: dict, url_analyzer: URLAnalyzer, text_analyzer: TextAna
         "ai_action": ai_result.get("recommended_action", "-") if ai_result else "-",
         "url_score": url_result.score,
         "text_score": text_result.score,
+        "retrieved_fichas": [l.split("\n")[0] for l in retrieved_context.split("\n\n") if l] if retrieved_context else [],
         "ai_error": ai_error,
         "pass": final_risk == case["expected_severity"],
     }
@@ -186,6 +196,8 @@ async def main():
         print(f"       URL score: {r['url_score']:.2f} | Text score: {r['text_score']:.2f} | Confianza IA: {r['ai_confidence']:.0%}")
         if r["ai_category"] != "-":
             print(f"       Categoría: {r['ai_category']} | MITRE: {r['ai_mitre']} | Fase: {r['ai_lifecycle']} | Acción: {r['ai_action']}")
+        if r.get("retrieved_fichas"):
+            print(f"       RAG fichas: {', '.join(r['retrieved_fichas'])}")
         if r["ai_error"]:
             print(f"       {YELLOW}Error IA: {r['ai_error']}{RESET}")
         print()

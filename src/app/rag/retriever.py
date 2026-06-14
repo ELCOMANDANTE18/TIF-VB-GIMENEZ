@@ -1,4 +1,11 @@
+import unicodedata
+
 from app.rag.corpus import CORPUS
+
+
+def _normalize(text: str) -> str:
+    """Lowercase y elimina tildes para matching robusto entre variantes ortográficas."""
+    return unicodedata.normalize("NFD", text).encode("ascii", "ignore").decode("ascii").lower()
 
 
 def retrieve(
@@ -17,16 +24,15 @@ def retrieve(
     url_reasons = url_reasons or []
     text_patterns = text_patterns or []
 
-    # Texto de búsqueda: mensaje + reasons + patterns (todo en minúsculas)
     search_parts = [message] + url_reasons + text_patterns
-    search_text = " ".join(search_parts).lower()
+    search_text = _normalize(" ".join(search_parts))
 
     if not search_text.strip():
         return ""
 
     scored: list[tuple[int, dict]] = []
     for entry in CORPUS:
-        score = sum(1 for kw in entry["keywords"] if kw.lower() in search_text)
+        score = sum(1 for kw in entry["keywords"] if _normalize(kw) in search_text)
         if score > 0:
             scored.append((score, entry))
 

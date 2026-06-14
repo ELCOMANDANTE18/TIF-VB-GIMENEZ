@@ -253,7 +253,8 @@ CORPUS: list[dict] = [
             # Palabras del mensaje que identifican ataques en fase temprana
             "equipo de soporte", "actividad inusual", "inusual", "restricciones",
             "ganaste", "ganador", "sorteo", "premio", "48 horas", "a la brevedad",
-            "vence", "confirmanos", "confirmar identidad",
+            "vence", "confirmanos", "confirmar identidad", "titular",
+            "sos el titular", "somos del equipo", "somos el equipo",
         ],
         "content": (
             "REGLA DE CALIBRACIÓN DE SEVERIDAD — aplicar ANTES de asignar HIGH:\n\n"
