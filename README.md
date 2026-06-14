@@ -1,8 +1,20 @@
-# 🛡️ Link Seguro
-### Sistema de detección de phishing en Instagram DMs
-**Trabajo Integrador Final — Ingeniería en Sistemas**  
-Universidad de Mendoza — 2026  
-Autor: Victor Benjamín Giménez
+<div align="center">
+  <img src="src/static/logo.png" alt="Link Seguro" width="160"/>
+
+  <h1>Link Seguro</h1>
+  <p><strong>Sistema de detección de phishing en Instagram DMs</strong></p>
+  <p>
+    <img src="https://img.shields.io/badge/Python-3.14-blue?logo=python&logoColor=white" alt="Python"/>
+    <img src="https://img.shields.io/badge/FastAPI-async-009688?logo=fastapi&logoColor=white" alt="FastAPI"/>
+    <img src="https://img.shields.io/badge/IA-gemma4--26b-orange?logo=google&logoColor=white" alt="IA"/>
+    <img src="https://img.shields.io/badge/SQLite-aiosqlite-003B57?logo=sqlite&logoColor=white" alt="SQLite"/>
+    <img src="https://img.shields.io/badge/Meta-Webhook-1877F2?logo=meta&logoColor=white" alt="Meta"/>
+  </p>
+  <p>
+    <strong>Trabajo Integrador Final 3 — Ingeniería en Informática</strong><br>
+    Universidad de Mendoza · 2026 · Autor: Victor Benjamín Giménez
+  </p>
+</div>
 
 ---
 
