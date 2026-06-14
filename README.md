@@ -12,7 +12,8 @@
   </p>
   <p>
     <strong>Trabajo Integrador Final 3 — Ingeniería en Informática</strong><br>
-    Universidad de Mendoza · 2026 · Autor: Victor Benjamín Giménez
+    Universidad de Mendoza · 2026<br>
+    Autor: Victor Benjamín Giménez · Legajo: 61.174
   </p>
 </div>
 
