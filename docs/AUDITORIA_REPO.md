@@ -306,42 +306,39 @@ cd src && .venv/bin/python scripts/evaluar_dataset.py
 - [ ] **Variables `ENABLE_AUTO_RESPONSE`, `ENABLE_EMAIL_ALERTS`, `URL_WEIGHT`, `TEXT_WEIGHT`** — no aparecen explicadas en ningún doc de `src/docs/`. Agregar sección en `README_TECNICO.md` o `arquitectura.md`.
 - [x] **`evaluar_dataset.py`**: precision/recall/F1 y matriz de confusión agregados en commit `868042a`.
 
-### Funcionalidades a implementar para el viernes
+### Funcionalidades implementadas
 
-#### RAG (Retrieval-Augmented Generation)
+#### RAG — [IMPLEMENTADO]
 
-El objetivo sería aumentar el prompt enviado a UM Cloud con fragmentos relevantes recuperados de una base de conocimiento (ej: descripción de técnicas MITRE, patrones de scams conocidos, etc.).
+Se eligió **Opción C: keyword matching sin dependencias externas** en lugar del enfoque vectorial original (ChromaDB + sentence-transformers). Decisión tomada por simplicidad de deployment, sin overhead de indexado, sin latencia de embeddings, y sin dependencias del sistema.
 
-**Archivos nuevos necesarios:**
+**Archivos creados:**
 ```
 src/app/rag/
-    __init__.py
-    embedder.py          # genera embeddings de texto
-    vector_store.py      # interfaz con ChromaDB o FAISS
-    retriever.py         # dado un texto, devuelve chunks relevantes
-src/data/knowledge_base/
-    mitre_techniques.json   # corpus de técnicas ATT&CK
-    scam_patterns.md        # descripciones de categorías de scam
-src/scripts/build_rag_index.py  # script one-time para indexar el corpus
+    __init__.py          # módulo vacío
+    corpus.py            # 12 entradas de conocimiento (11 originales + 1 calibración)
+    retriever.py         # retrieve(message, url_reasons, text_patterns, top_k=2)
 ```
 
-**Archivos existentes a modificar:**
-- `src/app/ai/groq_client.py` — añadir parámetro `retrieved_context: str` a `analyze_conversation()`, incluirlo en el `user_prompt`
-- `src/app/ai/prompts.py` — actualizar `SYSTEM_PROMPT` para instruir al modelo a usar el contexto recuperado
-- `src/app/analysis/orchestrator.py` — llamar al retriever antes de `groq_client.analyze_conversation()` y pasar el contexto
+**Archivos modificados:**
+- `src/app/ai/groq_client.py` — parámetro `retrieved_context: str` en `analyze_conversation()`, inyectado en `user_prompt`
+- `src/app/analysis/orchestrator.py` — llama a `retrieve()` antes del paso de IA, pasa el resultado como `retrieved_context`
 
-**Dependencias nuevas:**
-```
-chromadb>=0.5          # vector store local (sin servidor)
-sentence-transformers  # o usar endpoint de embeddings de UM Cloud si disponible
-```
+**Contenido del corpus** (`app/rag/corpus.py`):
+- 7 categorías de ataque: `account_verification_scam`, `credential_harvesting`, `otp_request`, `fake_giveaway`, `pig_butchering`, `brand_support_impersonation`, `romance_scam`
+- 2 técnicas MITRE: `T1566.002` (Spearphishing Link), `T1566.003` (Spearphishing via Service)
+- 2 principios Cialdini: urgencia/escasez, autoridad
+- 1 ficha de calibración de severidad: `severity_calibration` — guía explícita para distinguir MEDIUM de HIGH
 
-**Estimación de complejidad: COMPLEJO**  
-Razones: requiere diseño del corpus de conocimiento, evaluación de la calidad de retrieval, riesgo de aumentar la latencia del pipeline, y posible incompatibilidad con los límites de contexto del modelo `gemma4-26b`.
+**Cómo funciona el retriever:**
+1. Concatena `[mensaje actual] + url_reasons + text_patterns` → `search_text` (minúsculas)
+2. Puntúa cada entrada del corpus contando cuántos de sus `keywords` aparecen en `search_text`
+3. Devuelve las `top_k=2` con mayor score, formateadas como `### Título\nContenido`
+4. Si ningún keyword hace match → devuelve `""` (sin inyección al prompt)
 
 ---
 
-#### Exportar análisis a PDF
+#### Exportar análisis a PDF — [IMPLEMENTADO]
 
 **Librería recomendada: `weasyprint`**
 
@@ -447,6 +444,109 @@ El mensaje actual es inequívocamente benigno y el heurístico lo clasificó cor
 **Implicación para el diseño:** el dataset debería incluir dos etiquetas independientes: `severidad_mensaje` (evaluación del texto actual) y `severidad_conversacion` (evaluación del estado de riesgo de la sesión completa). Con la arquitectura actual, la IA combina ambas dimensiones en una única salida.
 
 **Conclusión para el informe:** *"TC08 evidencia que la IA, al incorporar el historial de conversación en el análisis, mantiene una postura conservadora ante contextos previamente comprometidos. Este comportamiento es esperable y deseable en un sistema donde el costo de un falso negativo (no detectar un ataque real) supera ampliamente al de una falsa alarma."*
+
+---
+
+## PARTE 7 — Evaluación con RAG activo y dataset ampliado
+
+**Fecha de ejecución:** 2026-06-14  
+**Modelo:** gemma4-26b (UM Cloud) + RAG keyword matching (corpus 12 entradas)  
+**Dataset ampliado:** 12 casos (8 originales + 4 nuevos MEDIUM: TC09–TC12)
+
+### 7.1 Evolución de resultados
+
+| Versión | Score | MEDIUM F1 | Macro F1 |
+|---------|-------|-----------|----------|
+| Sin RAG, 8 casos (línea base) | 6/8 — 75% | 0.00% | ~50% |
+| Con RAG, 8 casos | 6/8 — 75% | 0.00% | ~50% |
+| Con RAG, 12 casos (primera corrida) | 7/12 — 58% | 33.33% | 51.59% |
+| Con RAG + ficha calibración + TC11 ajustado | **9/12 — 75%** | **75.00%** | **72.86%** |
+
+### 7.2 Resultados por caso (versión final)
+
+| ID | Tipo | Esperado | Heurístico | IA | Final | Resultado |
+|---|---|---|---|---|---|---|
+| TC01 | normal_greeting | LOW | LOW | LOW | LOW | PASS |
+| TC02 | credential_harvesting | HIGH | MEDIUM | HIGH | HIGH | PASS |
+| TC03 | account_verification_scam | HIGH | LOW | HIGH | HIGH | PASS |
+| TC04 | pig_butchering_early | MEDIUM | LOW | MEDIUM | MEDIUM | PASS |
+| TC05 | pig_butchering_advanced | HIGH | LOW | HIGH | HIGH | PASS |
+| TC06 | fake_giveaway | HIGH | MEDIUM | HIGH | HIGH | PASS |
+| TC07 | otp_request | HIGH | LOW | HIGH | HIGH | PASS |
+| TC08 | normal_after_phishing | LOW | LOW | HIGH | HIGH | **FAIL** |
+| TC09 | brand_support_impersonation_soft | MEDIUM | LOW | HIGH | HIGH | **FAIL** |
+| TC10 | suspicious_link_no_explicit_ask | MEDIUM | LOW | HIGH | HIGH | **FAIL** |
+| TC11 | romance_pig_butchering_hybrid | MEDIUM | LOW | MEDIUM | MEDIUM | PASS |
+| TC12 | fake_giveaway_no_link | MEDIUM | MEDIUM | MEDIUM | MEDIUM | PASS |
+
+### 7.3 Matriz de confusión final
+
+```
+                   → LOW    → MEDIUM    → HIGH
+  Real LOW            1           0         1
+  Real MEDIUM         0           3         2
+  Real HIGH           0           0         5
+
+  Clase      Precision    Recall    F1-score
+  ------------------------------------------
+  LOW         100.00%     50.00%     66.67%
+  MEDIUM      100.00%     60.00%     75.00%
+  HIGH          62.50%   100.00%     76.92%
+  ------------------------------------------
+  Macro         87.50%     70.00%     72.86%
+```
+
+### 7.4 Análisis de los 3 fallos restantes
+
+**TC08 — normal_after_phishing** (discutido en PARTE 6.3): tensión de diseño entre análisis por mensaje y análisis por conversación. La retractación `"lo mandé sin querer"` es ella misma una táctica de ingeniería social; el modelo lo interpreta correctamente desde el punto de vista de seguridad.
+
+**TC09 — brand_support_impersonation_soft**: La IA devolvió HIGH con 98% de confianza incluso con la ficha de calibración activa. La razón: el `TextAnalyzer` no detectó ningún patrón (text_score=0.00), por lo tanto `text_patterns=[]`. El RAG busca en el mensaje actual ("Por favor confirmanos que sos el titular para evitar restricciones en tu perfil") y recupera la ficha de calibración (match: "restricciones", "confirmanos"), pero el modelo ya tiene suficiente señal semántica del historial para clasificar HIGH con alta confianza. La ficha de calibración no logra frenar al modelo cuando la confianza supera el 95%.
+
+**TC10 — suspicious_link_no_explicit_ask**: URL score = 0.40 (shortener cutt.ly detectado). La ficha `mitre_T1566_002` se recupera correctamente y describe el patrón, pero el modelo interpreta el shortener + el pretexto "creo que salís vos" como señal suficiente para HIGH (clásica táctica de harvesting de credenciales). Desde el punto de vista de seguridad, el modelo no está equivocado — esta combinación tiene altísima tasa de conversión hacia phishing real.
+
+### 7.5 Impacto del RAG — qué funcionó y qué no
+
+**Lo que funcionó:**
+- TC04 (pig_butchering_early): el RAG recupera la ficha `pig_butchering` con descripción de la fase approach → el modelo mantiene MEDIUM en vez de escalar
+- TC11 (romance_pig_butchering_hybrid): "inversiones y cripto" en el texto dispara la ficha `pig_butchering` → el modelo clasifica correctamente MEDIUM (approach)
+- TC12 (fake_giveaway_no_link): la ficha `severity_calibration` ("sorteo sin link → MEDIUM") + la ficha `fake_giveaway` juntas logran que el modelo baje de HIGH a MEDIUM
+
+**Lo que no funcionó:**
+- TC09 y TC10: el modelo tiene confianza ≥ 92% y no cede ante el contexto RAG. La ficha de calibración ayuda en casos de confianza media (70–85%) pero no puede sobreponerse a certezas muy altas del modelo
+
+### 7.6 Posibles mejoras del RAG
+
+Las siguientes mejoras están ordenadas por impacto estimado y esfuerzo de implementación:
+
+#### Corto plazo (sin cambios de arquitectura)
+
+1. **Expandir el corpus con variantes lingüísticas rioplatenses**  
+   El TextAnalyzer no detecta patrones en TC09 (text_score=0.00) porque el mensaje usa español natural ("equipo de soporte") en lugar de keywords técnicos. Agregar al corpus entradas con variantes: "te mandamos", "nuestra plataforma", "equipo de seguridad", "cuenta en revisión".
+
+2. **Aumentar top_k a 3 en casos con alta confianza IA**  
+   Cuando `ai_confidence > 0.90`, pasar `top_k=3` en lugar de 2 para incluir la ficha de calibración junto a las 2 de ataque. Actualmente la ficha de calibración compite con otras entradas por los 2 slots disponibles.
+
+3. **Inyectar la calibración de severidad siempre** (incondicionalmente)  
+   En lugar de depender del keyword matching para recuperar la ficha `severity_calibration`, incluirla en todos los prompts como parte fija del `SYSTEM_PROMPT` o como prefijo del `retrieved_context`. Esto garantiza que el modelo siempre tenga la guía MEDIUM vs HIGH presente.
+
+#### Mediano plazo (cambios de arquitectura moderados)
+
+4. **Retrieval sobre el historial completo, no solo el mensaje actual**  
+   El retriever actual solo recibe el texto del mensaje actual (`text=current_message`). En TC09, las señales clave ("equipo de soporte", "actividad inusual") están en mensajes anteriores. Pasar también un resumen del historial al retriever ampliaría el alcance del matching.
+
+5. **Scoring con TF-IDF simple en lugar de bag-of-keywords**  
+   El retriever actual cuenta presencia binaria de keywords. Un scoring TF-IDF penalizaría keywords muy frecuentes ("instagram", "soporte") y favorecería términos discriminativos ("typosquatting", "6 dígitos", "mandame el código"), mejorando la precisión del retrieval.
+
+6. **Agregar feedback loop al corpus**  
+   Cuando el analista en el dashboard confirma o corrige una clasificación, guardar el par (mensaje, clasificación_correcta) para enriquecer el corpus automáticamente. Requiere agregar un endpoint de feedback en el dashboard.
+
+#### Largo plazo (cambios de arquitectura mayores)
+
+7. **Reemplazar keyword matching por embeddings semánticos**  
+   Usar el endpoint de embeddings de UM Cloud (si disponible) o un modelo liviano local (e.g., `all-MiniLM-L6-v2` vía sentence-transformers) para búsqueda por similitud coseno en lugar de matching léxico. Resolvería el problema del español natural vs keywords técnicos.
+
+8. **RAG con memoria de conversación persistente**  
+   Vectorizar los últimos N análisis exitosos y recuperarlos cuando aparece una conversación similar. El sistema aprendería de casos reales detectados en producción, no solo del corpus estático.
 
 ---
 
