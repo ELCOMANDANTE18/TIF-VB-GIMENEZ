@@ -5,8 +5,8 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from pathlib import Path
 
-from fastapi import APIRouter, Form, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi import APIRouter, Form, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
 from app.config import settings
 from app.notifications.email_notifier import send_email_alert
@@ -839,6 +839,22 @@ async def accion_responder(request: Request, id_conversacion: str = Form(...)):
         _marcar_respondido_sync(id_conversacion)
         return JSONResponse({"ok": True, "message": "DM enviado al remitente"})
     return JSONResponse({"ok": False, "message": "No se pudo enviar el DM (ventana 24hs o token inválido)"})
+
+
+@router.get("/conversacion/{id_conversacion}/pdf")
+def export_pdf(request: Request, id_conversacion: str):
+    user = get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+    from app.dashboard.pdf_export import render_pdf
+    pdf_bytes = render_pdf(id_conversacion)
+    if pdf_bytes is None:
+        raise HTTPException(status_code=404, detail="Conversación no encontrada")
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="analisis_{id_conversacion}.pdf"'},
+    )
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
