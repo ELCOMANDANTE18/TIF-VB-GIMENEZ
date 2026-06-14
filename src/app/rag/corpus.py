@@ -291,4 +291,110 @@ CORPUS: list[dict] = [
             "saturen al analista."
         ),
     },
+
+    # ── MARCOS NORMATIVOS ─────────────────────────────────────────────────────
+    {
+        "id": "nist_otp_protection",
+        "title": "NIST 800-63B — Ningún verificador legítimo pide OTP por DM",
+        "keywords": [
+            "mandame el código", "pasame el código", "reenvíame el código",
+            "código que te llegó", "es solo 6 números", "me llegó un código",
+            "código de verificación", "código de seguridad",
+            "te lo mandé por error", "necesito que me lo reenvíes",
+            "otp", "2fa", "doble factor", "autenticación",
+        ],
+        "content": (
+            "MARCO: NIST SP 800-63B §5.2.3 establece que ningún verificador "
+            "legítimo solicitará el código OTP/2FA al usuario a través de un "
+            "canal de mensajería. Instagram, Meta y cualquier plataforma legítima "
+            "NUNCA piden el código que le llegó por SMS al usuario en un DM.\n"
+            "ATAQUE: el atacante solicita que la víctima reenvíe el código "
+            "de verificación bajo pretextos ('te lo mandé por error', 'necesito "
+            "verificar tu identidad'). Con el código obtiene acceso inmediato.\n"
+            "CLASIFICACIÓN AUTOMÁTICA: cualquier mensaje pidiendo un código de "
+            "verificación recibido por SMS es HIGH risk independientemente del "
+            "pretexto — no existe escenario legítimo para esta solicitud.\n"
+            "FASE: hook directo. MITRE: T1566.003."
+        ),
+    },
+    {
+        "id": "owasp_pretexting",
+        "title": "OWASP — Pretexting: escenario fabricado de autoridad",
+        "keywords": [
+            "somos el equipo", "somos del equipo", "equipo de seguridad",
+            "equipo de soporte", "instagram support", "meta support",
+            "detectamos", "identificamos", "hemos notado", "hemos detectado",
+            "actividad inusual", "actividad sospechosa", "movimientos extraños",
+            "violación de términos", "infracción de política", "copyright",
+            "derechos de autor", "tu cuenta está en riesgo",
+            "necesitamos verificar", "debés verificar",
+            "support_impersonation",
+        ],
+        "content": (
+            "MARCO: OWASP Social Engineering Prevention — Pretexting. Técnica "
+            "donde el atacante fabrica un escenario de autoridad creíble para "
+            "que la víctima cumpla una solicitud que normalmente rechazaría.\n"
+            "PATRÓN EN INSTAGRAM DMs: el atacante se presenta como soporte de "
+            "Instagram/Meta, alega un problema inventado (violación de política, "
+            "actividad inusual, infracción de derechos de autor) y exige una "
+            "acción urgente para 'resolver' el problema.\n"
+            "INDICADORES: claim de ser equipo oficial + problema fabricado + "
+            "urgencia + solicitud de acción (clic en link, confirmar identidad, "
+            "enviar código). Instagram NUNCA contacta usuarios por DM.\n"
+            "SEVERIDAD: MEDIUM si falta el link/código, HIGH si incluye alguno.\n"
+            "FASE: hook → pressure. MITRE: T1566.003."
+        ),
+    },
+    {
+        "id": "owasp_urgency_bypass",
+        "title": "OWASP — Presión temporal artificial: bypass del pensamiento crítico",
+        "keywords": [
+            "urgency", "urgente", "inmediatamente", "ahora mismo",
+            "sin demora", "a la brevedad", "cuanto antes",
+            "24 horas", "48 horas", "horas para responder",
+            "vence", "expira", "se cierra", "último aviso",
+            "tu cuenta será eliminada", "dado de baja", "inhabilitada",
+            "perdés acceso", "perderás tu cuenta", "acción requerida",
+            "tiempo limitado", "no hay tiempo",
+        ],
+        "content": (
+            "MARCO: OWASP Social Engineering — Urgency/Artificial Time Pressure. "
+            "La creación de plazos artificiales es una táctica documentada para "
+            "impedir que la víctima consulte con otros o verifique la legitimidad "
+            "del mensaje antes de actuar.\n"
+            "SEÑALES EN INSTAGRAM DMs: deadlines específicos ('24 horas', '48 horas'), "
+            "amenazas de consecuencias irreversibles ('tu cuenta será eliminada "
+            "permanentemente', 'perderás acceso a tus fotos'), llamadas a acción "
+            "inmediata ('actuá ya', 'respondé ahora mismo').\n"
+            "REGLA DE CALIBRACIÓN: la urgencia SOLA sin link ni código → MEDIUM. "
+            "Urgencia + link externo o solicitud de código → HIGH.\n"
+            "Las plataformas legítimas siempre dan tiempo razonable para actuar "
+            "y envían notificaciones por múltiples canales, nunca solo por DM.\n"
+            "FASE: pressure. Principio Cialdini: urgency/scarcity."
+        ),
+    },
+    {
+        "id": "retraction_cover",
+        "title": "Retractación post-phishing — táctica de cobertura",
+        "keywords": [
+            "borralo", "borrar", "lo mandé sin querer", "fue un error",
+            "me equivoqué", "no era para vos", "ignoralo", "olvidalo",
+            "mandé mal", "te lo mandé por error", "no le des bola",
+            "disculpá", "perdón por el mensaje", "ignorá ese link",
+        ],
+        "content": (
+            "PATRÓN — RETRACTACIÓN POST-PHISHING: el atacante envía contenido "
+            "malicioso (link, solicitud de OTP, pedido de datos) y luego se "
+            "retracta ('fue un error', 'borralo', 'no era para vos'). Esta es "
+            "una táctica estándar usada cuando la víctima no respondió o para "
+            "bajar la guardia antes de un segundo intento.\n"
+            "DECISIÓN DE CLASIFICACIÓN: mantener el riesgo en al menos MEDIUM. "
+            "La retractación no invalida el intento previo — un atacante real "
+            "diría exactamente lo mismo que alguien que genuinamente se equivocó.\n"
+            "ACCIÓN: el operador humano debe revisar el historial completo y "
+            "decidir si la retractación es genuina. No desescalar a LOW de forma "
+            "automática.\n"
+            "FASE: puede aparecer en cualquier etapa. MITRE: T1566.002/003."
+        ),
+    },
 ]

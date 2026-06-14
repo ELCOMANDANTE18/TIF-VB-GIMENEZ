@@ -92,10 +92,12 @@ class PhishingOrchestrator:
             )
             mensajes_analizados = len(history) + 1
 
+            last_history_text = history[-1]["texto"] if history else ""
             retrieved_context = retrieve(
                 message=text,
                 url_reasons=url_result.reasons,
                 text_patterns=text_result.patterns_matched,
+                extra_context=last_history_text,
             )
             if retrieved_context:
                 logger.info("RAG: contexto recuperado (%d chars)", len(retrieved_context))

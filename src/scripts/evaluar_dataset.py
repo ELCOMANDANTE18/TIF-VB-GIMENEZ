@@ -117,10 +117,12 @@ async def run_case(case: dict, url_analyzer: URLAnalyzer, text_analyzer: TextAna
     heuristic = heuristic_risk(url_result.score, text_result.score)
 
     # RAG: recuperar contexto de conocimiento relevante para el mensaje actual
+    last_history_text = history[-1]["texto"] if history else ""
     retrieved_context = retrieve(
         message=current_msg,
         url_reasons=url_result.reasons,
         text_patterns=text_result.patterns_matched,
+        extra_context=last_history_text,
     )
 
     # Análisis IA

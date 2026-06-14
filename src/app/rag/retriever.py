@@ -12,6 +12,7 @@ def retrieve(
     message: str,
     url_reasons: list[str] | None = None,
     text_patterns: list[str] | None = None,
+    extra_context: str = "",
     top_k: int = 2,
 ) -> str:
     """
@@ -25,6 +26,8 @@ def retrieve(
     text_patterns = text_patterns or []
 
     search_parts = [message] + url_reasons + text_patterns
+    if extra_context:
+        search_parts.append(extra_context)
     search_text = _normalize(" ".join(search_parts))
 
     if not search_text.strip():
