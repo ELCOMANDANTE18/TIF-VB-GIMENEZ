@@ -17,6 +17,9 @@ CORPUS: list[dict] = [
             "equipo de soporte", "support team", "instagram support",
             "urgency", "urgente", "24 horas", "within 24",
             "typosquatting", "login", "secure", "badge", "copyright",
+            # variantes rioplatenses
+            "tu perfil va a ser dado de baja", "detectamos movimientos extraños",
+            "el equipo de seguridad de Meta", "tu cuenta va a quedar inhabilitada",
         ],
         "content": (
             "DESCRIPCIÓN: El atacante se hace pasar por el equipo de soporte de Instagram "
@@ -59,6 +62,9 @@ CORPUS: list[dict] = [
             "sms", "autenticación", "authentication", "token", "6 dígitos",
             "recibiste un código", "te llegó un código", "mandame el código",
             "two factor", "2fa", "doble factor",
+            # variantes rioplatenses
+            "me llegó un código a tu número", "necesito que me reenvíes ese mensaje",
+            "es solo 6 números", "pasame el código que te llegó",
         ],
         "content": (
             "DESCRIPCIÓN: El atacante pide el código de verificación de dos factores (OTP/2FA) "
@@ -78,6 +84,9 @@ CORPUS: list[dict] = [
             "prize", "sorteo", "giveaway", "gratis", "free", "regalo",
             "gift", "reclama", "claim", "recompensa", "reward",
             "gift card", "tarjeta regalo", "voucher",
+            # variantes rioplatenses
+            "fuiste el elegido", "te tocó a vos",
+            "mandanos tus datos para coordinar", "ganaste sin participar",
         ],
         "content": (
             "DESCRIPCIÓN: El atacante informa a la víctima que 'ganó' un sorteo, premio o "
@@ -100,6 +109,10 @@ CORPUS: list[dict] = [
             "trading", "plataforma", "rentabilidad", "ganancias", "profits",
             "te enseño", "te ayudo a invertir", "oportunidad", "opportunity",
             "rendimiento", "return", "retorno", "porcentaje", "percentage",
+            # variantes rioplatenses / culturales
+            "tengo una plataforma exclusiva", "empezá con lo que puedas",
+            "te paso el link de la app", "tengo un grupito donde compartimos señales",
+            "te enseño a hacer trading",
         ],
         "content": (
             "DESCRIPCIÓN: Estafa de larga duración. El atacante construye confianza durante "

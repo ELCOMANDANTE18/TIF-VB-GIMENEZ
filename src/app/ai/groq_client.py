@@ -4,9 +4,15 @@ from openai import AsyncOpenAI
 
 from app.ai.prompts import SYSTEM_PROMPT
 from app.config import settings
+from app.rag.corpus import CORPUS
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# Ficha de calibración siempre presente en el prompt, independiente del retriever
+_CALIBRATION_CONTENT = next(
+    (e["content"] for e in CORPUS if e["id"] == "severity_calibration"), ""
+)
 
 _DEFAULT_RESULT = {
     "is_phishing": False,
@@ -62,10 +68,16 @@ async def analyze_conversation(
         history_text = _format_history(conversation_history)
         reasons_text = "\n".join(f"- {r}" for r in reasons) if reasons else "- Ninguno"
 
-        context_section = (
-            f"\nContexto de base de conocimiento relevante:\n{retrieved_context}\n"
-            if retrieved_context else ""
-        )
+        # severity_calibration siempre presente; el retriever puede traer más contexto
+        context_section = f"\nCalibración de severidad (aplicar siempre):\n{_CALIBRATION_CONTENT}\n"
+        if retrieved_context:
+            # Filtrar severity_calibration del retrieved_context para evitar duplicado
+            extra_blocks = [
+                block for block in retrieved_context.split("\n\n")
+                if "Calibración de severidad" not in block and block.strip()
+            ]
+            if extra_blocks:
+                context_section += "\nContexto adicional relevante:\n" + "\n\n".join(extra_blocks) + "\n"
 
         user_prompt = (
             f"Historial de la conversación:\n{history_text}\n\n"
