@@ -234,7 +234,17 @@ async def update_username_if_missing(
                 return username
     except Exception:
         pass
-    return f"...{participante_id[-8:]}"
+    fallback = f"...{participante_id[-8:]}"
+    try:
+        async with aiosqlite.connect(get_db_path()) as db:
+            await db.execute(
+                "UPDATE conversacion SET participante_username = ? WHERE id_conversacion = ? AND (participante_username IS NULL OR participante_username = '')",
+                (fallback, id_conversacion),
+            )
+            await db.commit()
+    except Exception:
+        pass
+    return fallback
 
 
 async def es_cuenta_propia(ig_user_id: str) -> bool:
