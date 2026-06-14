@@ -20,21 +20,67 @@ pipeline de análisis de 4 capas.
 Instagram DM
      │
      ▼
-Meta Graph API (Webhook)
-     │
+Meta Graph API (Webhook POST /webhook)
+     │  HMAC-SHA256 validation
      ▼
 FastAPI + Uvicorn
-     │
+     │  BackgroundTasks (no bloquea a Meta)
      ├──► URLAnalyzer      (PhishTank 29k dominios + URLhaus + Regex)
-     ├──► TextAnalyzer     (Patrones de ingeniería social)
-     └──► UM Cloud AI      (gemma4-26b — MITRE ATT&CK + APWG + Cialdini)
+     ├──► TextAnalyzer     (4 patrones regex ES/EN de ingeniería social)
+     ├──► RAG Retriever    (keyword matching sobre 12 fichas de conocimiento)
+     └──► UM Cloud AI      (gemma4-26b — MITRE ATT&CK + Cialdini + lifecycle)
                │
                ▼
-         SQLite (local)
+         SQLite (aiosqlite, raw SQL)
                │
-               ▼
-    Dashboard Web /dashboard
-    (login multiusuario, alertas, detalle por conversación)
+     ┌─────────┴──────────┐
+     ▼                    ▼
+Dashboard Web         Notificaciones
+/dashboard            DM automático al atacante
+(multiusuario,        Email HTML al dueño
+ análisis + PDF)      de la cuenta
+```
+
+### Diagrama de módulos
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         FastAPI app                             │
+│                                                                 │
+│  ┌──────────────┐     ┌─────────────────────────────────────┐  │
+│  │   Webhook    │────►│         Analysis Pipeline           │  │
+│  │  01-webhook  │     │  ┌────────────┐  ┌───────────────┐  │  │
+│  │              │     │  │URLAnalyzer │  │ TextAnalyzer  │  │  │
+│  │  GET verify  │     │  │ (PhishTank │  │ (4 patrones   │  │  │
+│  │  POST events │     │  │  URLhaus)  │  │  regex ES/EN) │  │  │
+│  │  HMAC valid  │     │  └─────┬──────┘  └──────┬────────┘  │  │
+│  └──────────────┘     │        └────────┬─────────┘          │  │
+│                        │    orchestrator │  02-analysis       │  │
+│                        │                ▼                     │  │
+│  ┌──────────────┐     │  ┌──────────────────────────────┐   │  │
+│  │  Dashboard   │     │  │     IA Generativa + RAG       │   │  │
+│  │  05-dashboard│     │  │  RAG retriever (12 fichas)    │   │  │
+│  │              │     │  │  UM Cloud gemma4-26b          │   │  │
+│  │  lista convs │     │  │  MITRE + Cialdini + lifecycle │   │  │
+│  │  detalle     │     │  └──────────────┬───────────────┘   │  │
+│  │  export PDF  │     │                  │  03-ai            │  │
+│  └──────┬───────┘     └──────────────────┼──────────────────┘  │
+│         │                                │                      │
+│         ▼                                ▼                      │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │              Base de datos — SQLite                       │  │
+│  │  conversacion │ mensaje │ analisis_conversacion │ usuario │  │
+│  │                     04-db                                 │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│         │                                │                      │
+│         ▼                                ▼                      │
+│  ┌──────────────┐              ┌─────────────────┐             │
+│  │   Auth       │              │  Notificaciones │             │
+│  │  bcrypt +    │              │  DM automático  │             │
+│  │  itsdangerous│              │  Email HTML     │             │
+│  │  cookies 8h  │              │   06-notif.     │             │
+│  └──────────────┘              └─────────────────┘             │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -44,10 +90,13 @@ FastAPI + Uvicorn
 | Componente | Tecnología |
 |---|---|
 | Backend | Python 3.14 + FastAPI |
-| IA Generativa | gemma4-26b via UM Cloud |
-| Detección heurística | PhishTank + URLhaus + Regex |
-| Base de datos | SQLite + aiosqlite |
-| Autenticación | bcrypt + itsdangerous |
+| IA Generativa | gemma4-26b via UM Cloud (OpenAI-compatible API) |
+| RAG | Keyword matching sobre corpus de 12 fichas (sin embeddings) |
+| Detección heurística | PhishTank (29k dominios) + URLhaus + Regex |
+| Base de datos | SQLite + aiosqlite (raw SQL, sin ORM) |
+| Autenticación | bcrypt + itsdangerous (cookies firmadas, 8h) |
+| Notificaciones | Instagram Messages API + SMTP Gmail |
+| Exportación | weasyprint 69.0 (HTML → PDF) |
 | Túnel público | ngrok |
 | API externa | Meta Graph API v25.0 |
 
@@ -59,17 +108,22 @@ FastAPI + Uvicorn
 TIF-VB-GIMENEZ/
 ├── src/
 │   ├── app/
-│   │   ├── ai/              # Cliente UM Cloud + system prompt
-│   │   ├── analysis/        # URLAnalyzer, TextAnalyzer, Orchestrator
-│   │   ├── dashboard/       # Dashboard web + autenticación
+│   │   ├── ai/              # Cliente UM Cloud + system prompt + RAG
+│   │   ├── analysis/        # URLAnalyzer, TextAnalyzer, Orchestrator, Observer
+│   │   ├── dashboard/       # Dashboard web + auth + export PDF
 │   │   ├── db/              # Cliente SQLite
-│   │   ├── notifications/   # Módulo de alertas Instagram
-│   │   └── webhook/         # Endpoints Meta Webhook
+│   │   ├── models/          # Schemas Pydantic (URLResult, TextResult, AnalysisResult)
+│   │   ├── notifications/   # DM automático + email HTML
+│   │   ├── rag/             # Corpus de conocimiento + retriever
+│   │   ├── utils/           # Logger
+│   │   └── webhook/         # Endpoints Meta Webhook + validación HMAC
 │   ├── database/            # Schema SQL + script de inicialización
-│   ├── data/                # BD SQLite local (no se sube al repo)
-│   ├── docs/                # Documentación técnica
-│   ├── scripts/             # Scripts de setup y mantenimiento
-│   └── tests/               # Dataset de evaluación
+│   ├── data/                # BD SQLite local (excluida del repo)
+│   ├── docs/                # Documentación técnica (ver abajo)
+│   ├── scripts/             # Scripts de setup, evaluación y mantenimiento
+│   ├── static/              # Logo + assets estáticos
+│   └── tests/               # Dataset de evaluación (12 casos etiquetados)
+├── docs/                    # Índice de documentación (ver abajo)
 ├── .gitignore
 └── README.md
 ```
@@ -90,17 +144,7 @@ uvicorn app.main:app --reload --port 8000
 Ver: http://localhost:8000/dashboard  
 Login: admin / admin123
 
----
-
-## Documentación técnica
-
-| Documento | Contenido |
-|---|---|
-| docs/README_TECNICO.md | Arquitectura completa |
-| docs/PROMPT_SUSTENTO.md | Sustento académico de la IA |
-| docs/BASE_DE_DATOS.md | Modelo de datos SQLite |
-| docs/DECISIONES_ARQUITECTURA.md | Registro de decisiones (ADRs) |
-| docs/INSTALACION.md | Guía paso a paso |
+Para más detalle: [docs/INSTALACION.md](docs/INSTALACION.md)
 
 ---
 
@@ -108,15 +152,54 @@ Login: admin / admin123
 
 | Usuario | Contraseña | Rol |
 |---|---|---|
-| admin | admin123 | Ve todo |
-| flia_test | link2024 | Ve sus conversaciones |
-| benja | link2024 | Ve sus conversaciones |
-| hernesto | link2024 | Ve sus conversaciones |
+| admin | admin123 | Ve el análisis completo; mensajes protegidos |
+| flia_test | link2024 | Ve sus conversaciones con texto completo |
+| benja | link2024 | Ve sus conversaciones con texto completo |
+| hernesto | link2024 | Ve sus conversaciones con texto completo |
+
+---
+
+## Documentación del proyecto
+
+### Documentación técnica general
+
+| Documento | Contenido |
+|---|---|
+| [Arquitectura](docs/README_TECNICO.md) | Arquitectura completa, componentes y flujos |
+| [Decisiones de arquitectura (ADRs)](docs/DECISIONES_ARQUITECTURA.md) | Registro de decisiones técnicas con justificación |
+| [Base de datos](docs/BASE_DE_DATOS.md) | Modelo de datos SQLite, schema y queries clave |
+| [Sustento del prompt de IA](docs/PROMPT_SUSTENTO.md) | Marco teórico: MITRE ATT&CK, Cialdini, APWG |
+| [Instalación](docs/INSTALACION.md) | Guía paso a paso con prerequisitos y troubleshooting |
+| [Auditoría del repositorio](docs/AUDITORIA_REPO.md) | Auditoría completa, métricas de evaluación y mejoras propuestas |
+
+### Documentación por módulo
+
+| Módulo | Archivo | Descripción |
+|---|---|---|
+| Webhook | [docs/modulos/01-webhook.md](docs/modulos/01-webhook.md) | Recepción de eventos Meta, HMAC, BackgroundTasks |
+| Motor de análisis | [docs/modulos/02-analysis.md](docs/modulos/02-analysis.md) | Pipeline: URL + Text + URLhaus + Orchestrator + Observer |
+| IA Generativa | [docs/modulos/03-ai.md](docs/modulos/03-ai.md) | UM Cloud (gemma4-26b), prompts, RAG |
+| Base de datos | [docs/modulos/04-db.md](docs/modulos/04-db.md) | SQLite schema, funciones, decisiones de diseño |
+| Dashboard | [docs/modulos/05-dashboard.md](docs/modulos/05-dashboard.md) | UI web, auth, export PDF |
+| Notificaciones | [docs/modulos/06-notifications.md](docs/modulos/06-notifications.md) | DM automático Instagram + email HTML |
+
+---
+
+## Métricas de evaluación (dataset 12 casos)
+
+| Clase | Precision | Recall | F1 |
+|---|---|---|---|
+| LOW | 100% | 50% | 66.67% |
+| MEDIUM | 100% | 60% | 75.00% |
+| HIGH | 62.5% | 100% | 76.92% |
+| **Macro** | **87.5%** | **70%** | **72.86%** |
+
+Score global: **9/12 (75%)**. Ver [docs/AUDITORIA_REPO.md](docs/AUDITORIA_REPO.md) PARTE 7 para análisis completo.
 
 ---
 
 ## Estándares aplicados
 
-- **MITRE ATT&CK T1566** — Clasificación de técnicas de phishing
-- **APWG eCrime Reports** — Taxonomía de ataques en redes sociales  
-- **Principios de Cialdini** — Mecanismos psicológicos de ingeniería social
+- **MITRE ATT&CK T1566** — Clasificación de técnicas de phishing (T1566.002 Spearphishing Link, T1566.003 via Service)
+- **APWG eCrime Reports** — Taxonomía de ataques en redes sociales
+- **Principios de Cialdini** — Mecanismos psicológicos de ingeniería social (autoridad, urgencia, escasez, prueba social, simpatía, compromiso)
