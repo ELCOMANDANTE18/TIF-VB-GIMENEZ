@@ -328,6 +328,14 @@ def _build_rows(conversations: list, is_admin: bool = False) -> str:  # noqa: C9
 
         conv_id_esc = html.escape(conv.get("id_conversacion", ""))
 
+        pdf_btn = (
+            f'<a href="/conversacion/{conv_id_esc}/pdf" target="_blank" '
+            f'class="inline-flex items-center gap-2 text-base py-3 px-6 rounded-xl font-semibold '
+            f'bg-[#F7F5EE] border border-[#1B1D1C] text-[#1B1D1C] '
+            f'hover:bg-[#1B1D1C] hover:text-white transition-colors no-underline">'
+            f'⬇ Exportar PDF</a>'
+        )
+
         if risk in ("HIGH", "MEDIUM"):
             auto_dm_html = ""
             if conv.get("respuesta_enviada"):
@@ -346,14 +354,16 @@ def _build_rows(conversations: list, is_admin: bool = False) -> str:  # noqa: C9
             acciones_html = (
                 '<div class="col-span-2 bg-[#F0F8F0] border border-[#A8C8A8] rounded-xl p-5">'
                 '<p class="text-base font-semibold uppercase tracking-wider text-[#8A8B85] mb-3">Acciones manuales</p>'
-                f'<div class="flex gap-3 flex-wrap">{notificar_btn}{auto_dm_html}</div>'
+                f'<div class="flex gap-3 flex-wrap">{notificar_btn}{auto_dm_html}{pdf_btn}</div>'
                 '</div>'
             )
         else:
             acciones_html = (
                 '<div class="col-span-2 bg-[#F7F5EE] border border-[#E9E6DD] rounded-xl p-5">'
                 '<p class="text-base font-semibold uppercase tracking-wider text-[#8A8B85] mb-3">Acciones manuales</p>'
-                '<p class="text-sm text-[#8A8B85]">— Sin riesgo detectado, no se requieren acciones —</p>'
+                f'<div class="flex gap-3 flex-wrap items-center">'
+                f'<span class="text-sm text-[#8A8B85]">— Sin riesgo detectado —</span>'
+                f'{pdf_btn}</div>'
                 '</div>'
             )
 
