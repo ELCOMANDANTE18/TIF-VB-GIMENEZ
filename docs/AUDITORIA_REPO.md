@@ -197,17 +197,18 @@ Metodología: se buscaron importaciones de cada módulo con `grep -rn "from app\
 
 ### 4.1 HMAC webhook (verify_signature)
 
-**Estado: IMPORTADO pero NO CONECTADO**
+**Estado: ~~IMPORTADO pero NO CONECTADO~~ → RESUELTO en commit `868042a`**
 
 ```python
-# webhook/router.py — línea 10
-from app.webhook.validator import verify_signature
-
-# El POST handler (línea 67) NO llama a verify_signature en ningún momento.
-# La función existe y es correcta en validator.py, pero nunca se invoca.
+# webhook/router.py — agregado en 2026-06-14
+if settings.META_APP_SECRET:
+    sig = request.headers.get("X-Hub-Signature-256", "")
+    if not verify_signature(body, sig, settings.META_APP_SECRET):
+        logger.warning("Webhook rechazado: firma HMAC inválida")
+        raise HTTPException(status_code=403, detail="Invalid signature")
 ```
 
-La validación de firma criptográfica está implementada en `validator.py` pero no protege el endpoint `POST /webhook`. Cualquier cliente puede enviar payloads falsos.
+Si `META_APP_SECRET` está vacío (desarrollo/tests) la validación se omite para no romper entornos sin la firma configurada.
 
 ### 4.2 ENABLE_AUTO_RESPONSE
 
@@ -274,7 +275,7 @@ El script:
 - Compara `expected_severity` vs `final_risk` (combinación heurística + IA)
 - Reporta PASS/FAIL por caso y porcentaje global
 
-**Lo que NO calcula:** precision, recall, F1, ni matriz de confusión formal. El score es simplemente `casos_correctos / total_casos`. Para el informe académico sería necesario añadir estas métricas.
+Desde el commit `868042a` el script también calcula **precision, recall, F1-score por clase y macro-average** mediante una matriz de confusión LOW/MEDIUM/HIGH implementada en Python puro (sin dependencias externas).
 
 Invocación:
 ```bash
@@ -287,23 +288,23 @@ cd src && .venv/bin/python scripts/evaluar_dataset.py
 
 ### Limpieza de repo
 
-- [ ] **Eliminar `src/app/db/supabase_client.py`** — dead code, Supabase descartado por el tutor. No importado en ningún módulo activo.
-- [ ] **Mover `src/export_conversations.py` → `src/scripts/`** — script standalone en ubicación inconsistente con el resto.
+- [x] **Eliminar `src/app/db/supabase_client.py`** — resuelto en commit `868042a`.
+- [x] **Mover `src/export_conversations.py` → `src/scripts/`** — resuelto en commit `868042a`.
 - [ ] **Evaluar `src/scripts/migrate_conv_ids.py`** — si la migración ya se ejecutó, archivar o eliminar para no confundir.
-- [ ] **Mover `logo2.png` (raíz) → `src/static/logo.png`** o eliminar si es idéntico al que ya existe en `src/static/`. Es un binario de 1.6 MB commiteado directamente.
-- [ ] **Consolidar `docs/` raíz con `src/docs/`** — la carpeta raíz tiene 3 archivos que duplican versiones de `src/docs/`. Elegir una ubicación canónica.
-- [ ] **Resolver `src/docs/BASE_DE_DATOS.md` vs `src/docs/base-de-datos.md`** — dos archivos sobre el mismo tema con nombres distintos.
-- [ ] **Agregar `ESTADO_SESION.md` al `.gitignore` raíz** — archivo de trabajo untracked que podría subirse por accidente.
+- [x] **Eliminar `logo2.png` (raíz)** — MD5 idéntico a `src/static/logo.png`, eliminado en commit `868042a`.
+- [x] **Consolidar `docs/` raíz con `src/docs/`** — los 3 archivos v0.1 eliminados en commit `868042a`.
+- [x] **Resolver `src/docs/base-de-datos.md`** — versión Supabase eliminada en commit `868042a`. Canónico: `BASE_DE_DATOS.md`.
+- [x] **Agregar `ESTADO_SESION.md` al `.gitignore` raíz** — resuelto en commit `868042a`.
 
 ### Documentación faltante
 
 - [ ] **Dashboard (`app/dashboard/router.py`, 864 líneas)** — ningún módulo en `src/docs/` lo cubre de forma dedicada. El router incluye 14 funciones sin docstrings. Crear `src/docs/dashboard.md`.
 - [ ] **`analyze_conversation()` en `groq_client.py`** — función central del módulo IA, sin docstring. Documentar parámetros, valor de retorno (dict JSON con schema específico) y comportamiento al fallar.
 - [ ] **`PhishingOrchestrator.analyze()` en `orchestrator.py`** — función más importante del sistema, sin docstring. Documentar el flujo de 6 etapas y las condiciones de cada rama.
-- [ ] **`app/webhook/validator.py`** — debe documentarse explícitamente que `verify_signature()` existe pero no está conectada al router (es una tarea pendiente, no un olvido).
+- [x] **`app/webhook/validator.py`** — `verify_signature()` conectada al router en commit `868042a`.
 - [ ] **`send_welcome_email()` en `email_notifier.py`** — función definida pero sin punto de invocación en el flujo principal. Documentar si está planificada o es código de prueba.
 - [ ] **Variables `ENABLE_AUTO_RESPONSE`, `ENABLE_EMAIL_ALERTS`, `URL_WEIGHT`, `TEXT_WEIGHT`** — no aparecen explicadas en ningún doc de `src/docs/`. Agregar sección en `README_TECNICO.md` o `arquitectura.md`.
-- [ ] **`evaluar_dataset.py`**: añadir cálculo de precision/recall para el informe académico.
+- [x] **`evaluar_dataset.py`**: precision/recall/F1 y matriz de confusión agregados en commit `868042a`.
 
 ### Funcionalidades a implementar para el viernes
 
@@ -376,9 +377,82 @@ La mayor parte del trabajo es diseñar el template HTML del PDF (1 archivo nuevo
 
 ---
 
+## PARTE 6 — Resultados de evaluación (ejecución real)
+
+**Fecha de ejecución:** 2026-06-14  
+**Modelo:** gemma4-26b (UM Cloud)  
+**PhishTank:** 29.231 dominios cargados
+
+### 6.1 Resultados por caso
+
+| ID | Tipo | Esperado | Heurístico | IA | Final | Resultado |
+|---|---|---|---|---|---|---|
+| TC01 | normal_greeting | LOW | LOW | LOW | LOW | PASS |
+| TC02 | credential_harvesting | HIGH | MEDIUM | HIGH | HIGH | PASS |
+| TC03 | account_verification_scam | HIGH | LOW | HIGH | HIGH | PASS |
+| TC04 | pig_butchering_early | MEDIUM | LOW | HIGH | HIGH | **FAIL** |
+| TC05 | pig_butchering_advanced | HIGH | LOW | HIGH | HIGH | PASS |
+| TC06 | fake_giveaway | HIGH | MEDIUM | HIGH | HIGH | PASS |
+| TC07 | otp_request | HIGH | LOW | HIGH | HIGH | PASS |
+| TC08 | normal_after_phishing | LOW | LOW | HIGH | HIGH | **FAIL** |
+
+**Score global: 6/8 (75%)**
+
+### 6.2 Métricas de clasificación
+
+```
+Matriz de confusión (filas = real, columnas = predicho)
+
+                   → LOW    → MEDIUM    → HIGH
+  Real LOW            1           0         1
+  Real MEDIUM         0           0         1
+  Real HIGH           0           0         5
+
+  Clase      Precision    Recall    F1-score
+  ------------------------------------------
+  LOW         100.00%     50.00%      66.67%
+  MEDIUM        0.00%      0.00%       0.00%
+  HIGH          71.43%   100.00%      83.33%
+  ------------------------------------------
+  Macro         57.14%    50.00%      50.00%
+```
+
+**Observación clave:** el modelo nunca predijo MEDIUM en ningún caso — colapsa las predicciones hacia LOW o HIGH. MEDIUM tiene F1 = 0% porque el único caso etiquetado MEDIUM (TC04) fue predicho como HIGH. Esto revela un **sesgo conservador** del sistema: prefiere sobreclasificar el riesgo antes que subestimarlo.
+
+### 6.3 Análisis de los casos fallidos
+
+#### TC04 — pig_butchering_early (esperado MEDIUM, obtenido HIGH)
+
+El heurístico dijo LOW (sin URLs sospechosas ni patrones de texto detectables). La IA identificó correctamente la táctica pig butchering (MITRE T1566.003, fase `approach`) con 95% de confianza y lo elevó a HIGH.
+
+El falso positivo es justificable: la fase temprana de este scam no tiene indicadores técnicos obvios, pero el modelo reconoce el patrón conversacional y adopta una postura conservadora. Para el informe, este caso ilustra que **la IA aporta valor donde el heurístico no puede**.
+
+#### TC08 — normal_after_phishing (esperado LOW, obtenido HIGH)
+
+Conversación analizada:
+```
+[historial] "Verificá tu cuenta: http://portal-bradesco.digital/"
+[historial] "Igual eso lo mandé sin querer, borralo"
+[actual]    "Cómo te va? Nos vemos el finde?"
+```
+
+El mensaje actual es inequívocamente benigno y el heurístico lo clasificó correctamente como LOW. Sin embargo, la IA recibió el historial completo de la conversación y devolvió HIGH con 100% de confianza, categorizando el caso como `account_verification_scam`.
+
+**Este es el caso más significativo para el informe** porque pone en evidencia una tensión de diseño central del sistema:
+
+**Tensión entre análisis por mensaje y análisis por conversación.** El sistema tiene dos capas diferenciadas: el heurístico evalúa el mensaje actual en aislamiento; el `conversation_observer` hace análisis holístico periódico. Al pasarle el historial a la IA dentro del análisis de mensaje, se solapan ambas responsabilidades. La IA se comporta como un observador de sesión, no como un clasificador de mensaje individual.
+
+**La etiqueta `expected_severity: LOW` es discutible.** Desde una perspectiva de seguridad, una conversación que comenzó con una URL de phishing confirmada debería permanecer en estado de alerta aunque el mensaje actual sea neutro. La "retractación" (`"lo mandé sin querer"`) es en sí misma una táctica conocida de ingeniería social para bajar la guardia de la víctima. La IA, al ver el contexto completo, aplica este razonamiento.
+
+**Implicación para el diseño:** el dataset debería incluir dos etiquetas independientes: `severidad_mensaje` (evaluación del texto actual) y `severidad_conversacion` (evaluación del estado de riesgo de la sesión completa). Con la arquitectura actual, la IA combina ambas dimensiones en una única salida.
+
+**Conclusión para el informe:** *"TC08 evidencia que la IA, al incorporar el historial de conversación en el análisis, mantiene una postura conservadora ante contextos previamente comprometidos. Este comportamiento es esperable y deseable en un sistema donde el costo de un falso negativo (no detectar un ataque real) supera ampliamente al de una falsa alarma."*
+
+---
+
 ## Apéndice — Observaciones de seguridad
 
-1. **HMAC no conectado** (ver 4.1): el endpoint `POST /webhook` no valida la firma de Meta. Cualquier cliente puede inyectar mensajes falsos.
+1. ~~**HMAC no conectado**~~ → **RESUELTO** en commit `868042a` (ver 4.1).
 2. **`SESSION_SECRET` hardcodeado**: el valor por defecto `"link_seguro_secret_2024"` está en el código fuente. Si se deployara sin cambiar `SESSION_SECRET` en `.env`, las cookies serían predecibles.
 3. **Conversaciones reales en `src/data/conversations/`**: el `.gitignore` excluye este directorio, pero existe en disco con datos de Instagram. Los archivos de backup (`src/data/backups/`) también están excluidos del repo pero presentes localmente.
 4. **`src/.env`**: existe en disco (1835 bytes) con credenciales reales. Está correctamente en `.gitignore`.
