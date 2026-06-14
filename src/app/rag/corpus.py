@@ -240,4 +240,41 @@ CORPUS: list[dict] = [
             "ser del equipo de Instagram debe considerarse sospechoso."
         ),
     },
+
+    # ── CALIBRACIÓN DE SEVERIDAD ──────────────────────────────────────────────
+    {
+        "id": "severity_calibration",
+        "title": "Calibración de severidad: cuándo usar MEDIUM vs HIGH",
+        "keywords": [
+            # Patrones de texto detectados por TextAnalyzer
+            "support_impersonation", "fraudulent_offer", "urgency",
+            # Patrones de URL detectados por URLAnalyzer
+            "shortener", "cutt.ly", "bit.ly", "tinyurl", "acortador",
+            # Palabras del mensaje que identifican ataques en fase temprana
+            "equipo de soporte", "actividad inusual", "inusual", "restricciones",
+            "ganaste", "ganador", "sorteo", "premio", "48 horas", "a la brevedad",
+            "vence", "confirmanos", "confirmar identidad",
+        ],
+        "content": (
+            "REGLA DE CALIBRACIÓN DE SEVERIDAD — aplicar ANTES de asignar HIGH:\n\n"
+            "MEDIUM (usar cuando hay 2+ indicadores pero FALTA el pedido explícito):\n"
+            "• Suplantación de soporte + urgencia, pero SIN link externo ni pedido de "
+            "contraseña/OTP/código → MEDIUM\n"
+            "• Link acortado (bit.ly, cutt.ly) enviado por desconocido, sin formulario "
+            "de login ni solicitud de datos → MEDIUM\n"
+            "• Sorteo o premio anunciado sin link de reclamo ni solicitud de datos "
+            "personales o pago → MEDIUM\n"
+            "• Contacto no solicitado con pretexto de inversión o romance, sin "
+            "solicitud directa de dinero ni link a plataforma → MEDIUM\n\n"
+            "HIGH (requiere al menos UNO de los siguientes):\n"
+            "• Link externo + formulario de login o solicitud de credenciales/OTP\n"
+            "• Pedido explícito de contraseña, código SMS de 6 dígitos, o datos de tarjeta\n"
+            "• Dominio de phishing confirmado (typosquatting, TLD .xyz/.top/.click)\n"
+            "• Solicitud directa de transferencia de dinero o criptomonedas\n\n"
+            "PRINCIPIO: la presencia de indicadores de ataque sin el 'trigger' de acción "
+            "comprometedora indica que el atacante aún está en fase approach/hook temprana. "
+            "Clasificar como MEDIUM permite monitorear sin generar falsas alarmas que "
+            "saturen al analista."
+        ),
+    },
 ]

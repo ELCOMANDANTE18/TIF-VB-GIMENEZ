@@ -101,5 +101,61 @@
       {"sender": "amigo", "texto": "Igual eso lo mandé sin querer, borralo"},
       {"sender": "amigo", "texto": "Cómo te va? Nos vemos el finde?"}
     ]
+  },
+  {
+    "id": "TC09",
+    "tipo": "brand_support_impersonation_soft",
+    "descripcion": "Suplantación de soporte Instagram sin link ni pedido de credenciales — fase approach",
+    "expected_severity": "MEDIUM",
+    "expected_is_phishing": true,
+    "expected_mitre": "T1566.003",
+    "expected_category": "brand_support_impersonation",
+    "mensajes": [
+      {"sender": "atacante", "texto": "Hola! Somos del equipo de soporte oficial de Instagram."},
+      {"sender": "atacante", "texto": "Detectamos actividad inusual en tu cuenta en las últimas horas."},
+      {"sender": "atacante", "texto": "Por favor confirmanos que sos el titular para evitar restricciones en tu perfil."}
+    ]
+  },
+  {
+    "id": "TC10",
+    "tipo": "suspicious_link_no_explicit_ask",
+    "descripcion": "Link acortado enviado por desconocido — URL sospechosa sin pedido explícito",
+    "expected_severity": "MEDIUM",
+    "expected_is_phishing": true,
+    "expected_mitre": "T1566.002",
+    "mensajes": [
+      {"sender": "atacante", "texto": "Hola! Vi tu perfil y me pareció genial, seguís mucha gente interesante."},
+      {"sender": "atacante", "texto": "Mirá este video que me llegó, creo que salís vos: https://cutt.ly/qw8Hbf3"}
+    ]
+  },
+  {
+    "id": "TC11",
+    "tipo": "romance_pig_butchering_hybrid",
+    "descripcion": "Híbrido romance + pig butchering — rapport con mención de inversiones, sin pedido directo",
+    "expected_severity": "MEDIUM",
+    "expected_is_phishing": true,
+    "expected_mitre": "T1566.003",
+    "expected_category": "pig_butchering",
+    "expected_lifecycle": "bond",
+    "mensajes": [
+      {"sender": "atacante", "texto": "Hola! Me apareciste entre sugerencias y me llamó la atención tu perfil."},
+      {"sender": "atacante", "texto": "Soy empresaria, viajo mucho. Me dedico a inversiones y cripto, me va muy bien económicamente."},
+      {"sender": "atacante", "texto": "¿Estás en pareja? Me gustaría conocerte mejor, pocas veces conozco alguien que me llame la atención así."}
+    ]
+  },
+  {
+    "id": "TC12",
+    "tipo": "fake_giveaway_no_link",
+    "descripcion": "Anuncio de sorteo falso con urgencia pero sin link — aún no pide datos",
+    "expected_severity": "MEDIUM",
+    "expected_is_phishing": true,
+    "expected_mitre": "T1566.003",
+    "expected_category": "fake_giveaway",
+    "expected_lifecycle": "hook",
+    "mensajes": [
+      {"sender": "atacante", "texto": "¡Felicitaciones! Fuiste seleccionado como ganador de nuestro sorteo mensual de seguidores."},
+      {"sender": "atacante", "texto": "Para coordinar la entrega del premio necesitamos que nos respondas a la brevedad."},
+      {"sender": "atacante", "texto": "El premio vence en 48 horas si no recibimos respuesta."}
+    ]
   }
 ]
