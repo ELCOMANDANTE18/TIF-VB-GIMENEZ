@@ -115,6 +115,7 @@ research/algo.txt
 src/retomar.txt
 src/algo.txt
 src/ESTADO_SESION.txt
+ESTADO_SESION.md
 
 # ── Backups de BD ─────────────────────────────────────────────
 data/*.db.bak.*

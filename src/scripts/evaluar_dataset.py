@@ -41,6 +41,58 @@ def heuristic_risk(url_score: float, text_score: float) -> str:
     return "LOW"
 
 
+def compute_metrics(results: list[dict]) -> dict:
+    classes = ["LOW", "MEDIUM", "HIGH"]
+    # conf[real][predicho] = cantidad de casos
+    conf = {e: {p: 0 for p in classes} for e in classes}
+    for r in results:
+        exp = r["expected_severity"]
+        pred = r["final_risk"]
+        if exp in classes and pred in classes:
+            conf[exp][pred] += 1
+
+    per_class = {}
+    for cls in classes:
+        tp = conf[cls][cls]
+        fp = sum(conf[e][cls] for e in classes if e != cls)
+        fn = sum(conf[cls][p] for p in classes if p != cls)
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+        per_class[cls] = {"precision": precision, "recall": recall, "f1": f1}
+
+    macro_p = sum(m["precision"] for m in per_class.values()) / len(classes)
+    macro_r = sum(m["recall"] for m in per_class.values()) / len(classes)
+    macro_f1 = sum(m["f1"] for m in per_class.values()) / len(classes)
+    return {
+        "confusion": conf,
+        "per_class": per_class,
+        "macro_precision": macro_p,
+        "macro_recall": macro_r,
+        "macro_f1": macro_f1,
+    }
+
+
+def print_metrics(metrics: dict) -> None:
+    classes = ["LOW", "MEDIUM", "HIGH"]
+    conf = metrics["confusion"]
+
+    print(f"\n{BOLD}MÉTRICAS DE CLASIFICACIÓN{RESET}\n")
+    print(f"  Matriz de confusión  (filas = real, columnas = predicho)\n")
+    print(f"  {'':14s}" + "".join(f"{'→ '+cls:>12s}" for cls in classes))
+    for exp in classes:
+        row = f"  {'Real '+exp:<14s}" + "".join(f"{conf[exp][pred]:>12d}" for pred in classes)
+        print(row)
+
+    print(f"\n  {'Clase':<8s} {'Precision':>10s} {'Recall':>10s} {'F1-score':>10s}")
+    print(f"  {'-'*42}")
+    for cls in classes:
+        m = metrics["per_class"][cls]
+        print(f"  {cls:<8s} {m['precision']:>10.2%} {m['recall']:>10.2%} {m['f1']:>10.2%}")
+    print(f"  {'-'*42}")
+    print(f"  {'Macro':<8s} {metrics['macro_precision']:>10.2%} {metrics['macro_recall']:>10.2%} {metrics['macro_f1']:>10.2%}\n")
+
+
 def combined_risk(heuristic: str, ai_severity: str) -> str:
     order = {"LOW": 0, "MEDIUM": 1, "HIGH": 2}
     if order.get(ai_severity, 0) > order.get(heuristic, 0):
@@ -146,6 +198,9 @@ async def main():
     if pct < 100:
         fallidos = [r["id"] for r in results if not r["pass"]]
         print(f"{YELLOW}Casos fallidos: {', '.join(fallidos)}{RESET}\n")
+
+    metrics = compute_metrics(results)
+    print_metrics(metrics)
 
 
 if __name__ == "__main__":
