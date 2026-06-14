@@ -40,7 +40,7 @@ FastAPI + Uvicorn
      │  BackgroundTasks (no bloquea a Meta)
      ├──► URLAnalyzer      (PhishTank 29k dominios + URLhaus + Regex)
      ├──► TextAnalyzer     (4 patrones regex ES/EN de ingeniería social)
-     ├──► RAG Retriever    (keyword matching sobre 12 fichas de conocimiento)
+      ├──► RAG Retriever    (keyword matching sobre 16 fichas de conocimiento — NIST, OWASP, MITRE, Cialdini)
      └──► UM Cloud AI      (gemma4-26b — MITRE ATT&CK + Cialdini + lifecycle)
                │
                ▼
@@ -72,7 +72,7 @@ Dashboard Web         Notificaciones
 │                        │                ▼                     │  │
 │  ┌──────────────┐     │  ┌──────────────────────────────┐   │  │
 │  │  Dashboard   │     │  │     IA Generativa + RAG       │   │  │
-│  │  05-dashboard│     │  │  RAG retriever (12 fichas)    │   │  │
+│  │  05-dashboard│     │  │  RAG retriever (16 fichas)    │  │  │
 │  │              │     │  │  UM Cloud gemma4-26b          │   │  │
 │  │  lista convs │     │  │  MITRE + Cialdini + lifecycle │   │  │
 │  │  detalle     │     │  └──────────────┬───────────────┘   │  │
@@ -104,7 +104,7 @@ Dashboard Web         Notificaciones
 |---|---|
 | Backend | Python 3.14 + FastAPI |
 | IA Generativa | gemma4-26b via UM Cloud (OpenAI-compatible API) |
-| RAG | Keyword matching sobre corpus de 12 fichas (sin embeddings) |
+| RAG | Keyword matching sobre corpus de 16 fichas (sin embeddings) |
 | Detección heurística | PhishTank (29k dominios) + URLhaus + Regex |
 | Base de datos | SQLite + aiosqlite (raw SQL, sin ORM) |
 | Autenticación | bcrypt + itsdangerous (cookies firmadas, 8h) |
@@ -202,12 +202,12 @@ Para más detalle: [docs/INSTALACION.md](docs/INSTALACION.md)
 
 | Clase | Precision | Recall | F1 |
 |---|---|---|---|
-| LOW | 100% | 50% | 66.67% |
-| MEDIUM | 100% | 60% | 75.00% |
-| HIGH | 62.5% | 100% | 76.92% |
-| **Macro** | **87.5%** | **70%** | **72.86%** |
+| LOW | 100% | 100% | 100.00% |
+| MEDIUM | 100% | 83.33% | 90.91% |
+| HIGH | 83.33% | 100% | 90.91% |
+| **Macro** | **94.44%** | **94.44%** | **93.94%** |
 
-Score global: **9/12 (75%)**. Ver [docs/AUDITORIA_REPO.md](docs/AUDITORIA_REPO.md) PARTE 7 para análisis completo.
+Score global: **11/12 (92%)**. Único caso fallido: TC08 (normal_after_phishing — el modelo IA prioriza la URL de phishing en el historial sobre la retractación, documentado como trabajo futuro). Ver [docs/AUDITORIA_REPO.md](docs/AUDITORIA_REPO.md) PARTE 9 para análisis completo.
 
 ---
 
@@ -216,3 +216,5 @@ Score global: **9/12 (75%)**. Ver [docs/AUDITORIA_REPO.md](docs/AUDITORIA_REPO.m
 - **MITRE ATT&CK T1566** — Clasificación de técnicas de phishing (T1566.002 Spearphishing Link, T1566.003 via Service)
 - **APWG eCrime Reports** — Taxonomía de ataques en redes sociales
 - **Principios de Cialdini** — Mecanismos psicológicos de ingeniería social (autoridad, urgencia, escasez, prueba social, simpatía, compromiso)
+- **NIST SP 800-63B** — Digital Identity Guidelines (OTP/2FA protection)
+- **OWASP Social Engineering Prevention** — Pretexting y artificial time pressure
