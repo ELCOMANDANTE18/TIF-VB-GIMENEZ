@@ -688,6 +688,155 @@ TC08 es el único fallo persistente. No es un bug corregible con el diseño actu
 
 ---
 
+## PARTE 9 — Ampliación de corpus rioplatense + calibración siempre presente (2026-06-14)
+
+**Commit:** `ec5c20d`  
+**Archivos modificados:** `app/rag/corpus.py`, `app/ai/groq_client.py`  
+**Métricas pre-cambio:** 11/12 (92%) — Macro F1 93.94%
+
+### 9.1 PASO 1 — Vocabulario rioplatense/regional (Opciones A + D)
+
+Se extendieron las keywords de 4 fichas existentes con frases naturales en español rioplatense. Ninguna ficha nueva fue creada.
+
+#### `account_verification_scam` — 4 frases agregadas
+
+| Keywords agregadas |
+|--------------------|
+| "tu perfil va a ser dado de baja" |
+| "detectamos movimientos extraños" |
+| "el equipo de seguridad de Meta" |
+| "tu cuenta va a quedar inhabilitada" |
+
+**Justificación:** atacantes reales en Argentina no dicen "suspended" ni "account suspended" — dicen "dado de baja" o "inhabilitada". Sin estas keywords, el retriever no recuperaba esta ficha para ataques con vocabulario local.
+
+#### `fake_giveaway` — 4 frases agregadas
+
+| Keywords agregadas |
+|--------------------|
+| "fuiste el elegido" |
+| "te tocó a vos" |
+| "mandanos tus datos para coordinar" |
+| "ganaste sin participar" |
+
+**Justificación:** los sorteos falsos en Argentina usan "te tocó a vos" y "fuiste el elegido" en lugar de "winner" o "you've been selected".
+
+#### `pig_butchering` — 5 frases agregadas
+
+| Keywords agregadas |
+|--------------------|
+| "tengo una plataforma exclusiva" |
+| "empezá con lo que puedas" |
+| "te paso el link de la app" |
+| "tengo un grupito donde compartimos señales" |
+| "te enseño a hacer trading" |
+
+**Justificación:** el vocabulario de pig butchering argentino es informal y cercano. "grupito de señales", "te enseño a hacer trading" y "empezá con lo que puedas" son frases típicas que el corpus original en inglés/español neutro no capturaría.
+
+#### `otp_request` — 4 frases agregadas
+
+| Keywords agregadas |
+|--------------------|
+| "me llegó un código a tu número" |
+| "necesito que me reenvíes ese mensaje" |
+| "es solo 6 números" |
+| "pasame el código que te llegó" |
+
+**Justificación:** la variante más común en Argentina es "pasame el código que te llegó" y "es solo 6 números" — formulaciones que el corpus original no tenía.
+
+### 9.2 PASO 2 — severity_calibration siempre presente (Opción C)
+
+**Cambio en `app/ai/groq_client.py`:**
+
+```python
+# ANTES — calibración solo si el retriever la recuperaba por keywords
+context_section = (
+    f"\nContexto de base de conocimiento relevante:\n{retrieved_context}\n"
+    if retrieved_context else ""
+)
+
+# DESPUÉS — calibración siempre presente; retriever agrega contexto adicional
+_CALIBRATION_CONTENT = next(
+    (e["content"] for e in CORPUS if e["id"] == "severity_calibration"), ""
+)
+
+context_section = f"\nCalibración de severidad (aplicar siempre):\n{_CALIBRATION_CONTENT}\n"
+if retrieved_context:
+    extra_blocks = [
+        block for block in retrieved_context.split("\n\n")
+        if "Calibración de severidad" not in block and block.strip()
+    ]
+    if extra_blocks:
+        context_section += "\nContexto adicional relevante:\n" + "\n\n".join(extra_blocks) + "\n"
+```
+
+**Efecto:** la guía MEDIUM vs HIGH está presente en el 100% de los análisis, no solo cuando el retriever la recupera. El bloque de deduplicación evita que aparezca dos veces cuando el retriever también la selecciona (como en TC10 y TC12).
+
+**Caso de uso beneficiado:** cualquier mensaje futuro con patrones de ataque sin keywords exactas del corpus. El modelo siempre tiene la regla de calibración disponible.
+
+### 9.3 Resultados post-cambio
+
+| Clase | F1 antes | F1 después | Δ |
+|-------|----------|------------|---|
+| LOW | 100% | 100% | = |
+| MEDIUM | 90.91% | 90.91% | = |
+| HIGH | 90.91% | 90.91% | = |
+| **Macro** | **93.94%** | **93.94%** | **=** |
+
+**Score: 11/12 (92%) — sin regresiones.** Las mejoras no degradaron ningún caso existente. El corpus más rico mejora la cobertura para mensajes futuros en español rioplatense.
+
+### 9.4 Trabajo futuro — Opción B: ficha de retractación (TC08)
+
+El único fallo persistente del sistema (TC08 — `normal_after_phishing`) requiere un cambio que no se implementó en esta sesión por alcance.
+
+**El patrón:** el atacante envía `http://portal-bradesco.digital/` en el mensaje 1, luego dice "Igual eso lo mandé sin querer, borralo" en el mensaje 2. El mensaje 3 es benigno. El sistema devuelve HIGH porque el modelo ve la URL de phishing en el historial.
+
+**Por qué no se implementó:** el retriever busca en `current_message + url_reasons + text_patterns`. Las keywords de retractación ("borralo", "lo mandé sin querer") están en el historial, no en el mensaje actual. Para que el RAG ayude en este caso, se necesitaría pasar el último mensaje del historial al retriever:
+
+```python
+# En orchestrator.py (cambio mínimo, no implementado):
+last_history_msg = conversation_history[-1]["texto"] if conversation_history else ""
+retrieved_context = retrieve(
+    message=current_message,
+    url_reasons=url_result.reasons,
+    text_patterns=text_result.patterns_matched,
+    extra_context=last_history_msg,   # nuevo parámetro
+)
+```
+
+Y en `retriever.py`:
+```python
+def retrieve(message, url_reasons=None, text_patterns=None,
+             extra_context="", top_k=2):
+    search_parts = [message] + url_reasons + text_patterns
+    if extra_context:
+        search_parts.append(extra_context)
+    ...
+```
+
+Con este cambio, "borralo" + "lo mandé sin querer" dispararían una ficha `retraction_cover` que guiaría al modelo a MEDIUM en lugar de HIGH.
+
+**Corpus entry propuesta (no implementada):**
+```python
+{
+    "id": "retraction_cover",
+    "keywords": [
+        "borralo", "borrar", "lo mandé sin querer", "fue un error",
+        "me equivoqué", "no era para vos", "ignoralo",
+    ],
+    "content": (
+        "PATRÓN — RETRACTACIÓN POST-PHISHING: el atacante envía contenido "
+        "malicioso y luego se retracta ('fue un error', 'borralo'). "
+        "Esta es una táctica estándar cuando la víctima no respondió.\n"
+        "DECISIÓN: mantener riesgo en MEDIUM — la retractación no invalida "
+        "el intento previo. El operador humano debe revisar el historial."
+    ),
+}
+```
+
+**Impacto estimado si se implementa:** TC08 pasaría de FAIL a PASS → 12/12 (100%), Macro F1 ~96–97%.
+
+---
+
 ## Apéndice — Observaciones de seguridad
 
 1. ~~**HMAC no conectado**~~ → **RESUELTO** en commit `868042a` (ver 4.1).
