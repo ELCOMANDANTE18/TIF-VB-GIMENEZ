@@ -87,13 +87,15 @@ def _get_data(id_conversacion: str) -> dict | None:
             return None
         data = dict(row)
 
+        MSG_LIMIT = 100
         cur = conn.execute(
             """SELECT sender_id, es_entrante, texto, timestamp_ig
                FROM mensaje WHERE id_conversacion = ?
-               ORDER BY timestamp_ig ASC""",
-            (id_conversacion,),
+               ORDER BY timestamp_ig DESC LIMIT ?""",
+            (id_conversacion, MSG_LIMIT),
         )
-        data["mensajes"] = [dict(r) for r in cur.fetchall()]
+        data["mensajes"] = list(reversed([dict(r) for r in cur.fetchall()]))
+        data["mensajes_truncados"] = data["total_mensajes"] > MSG_LIMIT
 
         for field in ("principios_cialdini", "urls_sospechosas"):
             try:
@@ -128,7 +130,15 @@ def _build_html(data: dict) -> str:
             f'background:{risk_color};border-radius:3px;"></span></span>'
         )
 
-    # Historial de mensajes
+    # Historial de mensajes (máx 100, los más recientes)
+    total_msgs = data.get("total_mensajes", 0)
+    truncado = data.get("mensajes_truncados", False)
+    msgs_header = (
+        f'Historial completo — {total_msgs} mensajes'
+        if not truncado
+        else f'Últimos 100 mensajes de {total_msgs} totales'
+    )
+
     msgs_html = ""
     for m in data.get("mensajes", []):
         es_entrante = bool(m.get("es_entrante"))
@@ -304,7 +314,7 @@ def _build_html(data: dict) -> str:
 </div>
 
 <div class="section">
-  <div class="section-title">Historial completo — {len(data.get('mensajes', []))} mensajes</div>
+  <div class="section-title">{msgs_header}</div>
   {msgs_html or '<p style="color:#8A8B85;">Sin mensajes registrados.</p>'}
 </div>
 
