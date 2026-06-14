@@ -53,6 +53,7 @@ async def analyze_conversation(
     text_score: float,
     reasons: list[str],
     conversation_id: str = "",
+    retrieved_context: str = "",
 ) -> dict:
     if not settings.UM_API_KEY:
         return {}
@@ -61,13 +62,19 @@ async def analyze_conversation(
         history_text = _format_history(conversation_history)
         reasons_text = "\n".join(f"- {r}" for r in reasons) if reasons else "- Ninguno"
 
+        context_section = (
+            f"\nContexto de base de conocimiento relevante:\n{retrieved_context}\n"
+            if retrieved_context else ""
+        )
+
         user_prompt = (
             f"Historial de la conversación:\n{history_text}\n\n"
             f'Mensaje actual siendo analizado:\n"{current_message[:500]}"\n\n'
             f"Resultados del análisis heurístico:\n"
             f"- URL score: {url_score:.2f}\n"
             f"- Text score: {text_score:.2f}\n"
-            f"- Indicadores detectados:\n{reasons_text}\n\n"
+            f"- Indicadores detectados:\n{reasons_text}\n"
+            f"{context_section}\n"
             "Analizá si esta conversación representa un intento de phishing o ingeniería social."
         )
 

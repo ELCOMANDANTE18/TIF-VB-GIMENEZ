@@ -11,6 +11,7 @@ from app.db.sqlite_client import (
 )
 from app.analysis import conversation_observer
 from app.ai import groq_client
+from app.rag.retriever import retrieve
 from app.notifications.messenger import send_phishing_alert
 from app.notifications.email_notifier import send_email_alert
 from app.models.schemas import AnalysisResult, RiskLevel
@@ -91,6 +92,14 @@ class PhishingOrchestrator:
             )
             mensajes_analizados = len(history) + 1
 
+            retrieved_context = retrieve(
+                message=text,
+                url_reasons=url_result.reasons,
+                text_patterns=text_result.patterns_matched,
+            )
+            if retrieved_context:
+                logger.info("RAG: contexto recuperado (%d chars)", len(retrieved_context))
+
             ai_result = await groq_client.analyze_conversation(
                 current_message=text,
                 conversation_history=history,
@@ -98,6 +107,7 @@ class PhishingOrchestrator:
                 text_score=text_result.score,
                 reasons=url_result.reasons + text_result.patterns_matched,
                 conversation_id=conversation_id,
+                retrieved_context=retrieved_context,
             )
 
             if ai_result:
