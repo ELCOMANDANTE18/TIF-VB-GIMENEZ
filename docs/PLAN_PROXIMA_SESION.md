@@ -76,7 +76,7 @@ Macro        94.44%     94.44%     93.94%
 
 ---
 
-## SECCIÓN 3 — Tarea C (pendiente): Migración a Jinja2
+## SECCIÓN 3 — ✅ Tarea C (COMPLETADA 2026-06-15): Migración a Jinja2
 
 ### Estado actual del router.py (890 líneas)
 
@@ -357,36 +357,39 @@ No se necesita ningún cambio en `main.py` si `Jinja2Templates` se instancia en 
 
 ---
 
-## SECCIÓN 4 — Próxima sesión: Tarea C — Migración a Jinja2
+## SECCIÓN 4 — Estado al cierre (2026-06-15): todas las tareas completadas
 
-### Fechas de referencia
-- **Sesión de trabajo:** mañana (2026-06-15)
-- **Demo:** viernes (4 días desde hoy)
+### Commit de esta sesión
 
-### Única tarea pendiente
+| Hash | Qué |
+|------|-----|
+| `4fcc010` | refactor(dashboard): migrar HTML inline a templates Jinja2 |
 
-| Tarea | Riesgo | Tiempo estimado | Si sale mal |
-|-------|--------|-----------------|-------------|
-| **C: Migración Jinja2** | Alto | 4-6 horas | El dashboard puede quedar en blanco o con errores de template — requiere rollback completo del router.py y borrar templates/ |
+### Qué quedó funcionando y verificado
 
-### Nota sobre el estado actual
+- **Tarea C completada** — migración Jinja2 exitosa ✓
+  - `src/templates/base.html` — head + navbar reutilizable ✓
+  - `src/templates/login.html` — formulario con toggle de contraseña ✓
+  - `src/templates/dashboard.html` — tabla con panel de detalle ✓
+  - `router.py`: 891 → 418 líneas (-53%) ✓
+  - Verificado con TestClient: login, dashboard, logout, privacidad admin ✓
+  - Jinja2 3.1.6 instalado en el venv ✓
+  - Nueva API de Starlette (`TemplateResponse(request, name, ctx)`) ✓
 
-Las Tareas A y B están completadas. El sistema está listo para la demo con:
+### Resumen final del proyecto (demo-ready)
+
 - **16 fichas** en el corpus RAG (NIST, OWASP, MITRE, Cialdini, calibración)
-- **11/12 (92%)** — TC08 documentado como trabajo futuro
-- **Dashboard funcional** con HTML en f-strings (deuda técnica, no bloqueante)
+- **11/12 (92%)** — Macro F1 93.94% — TC08 documentado como trabajo futuro
+- **Dashboard Jinja2** — deuda técnica saldada, templates en `src/templates/`
+- **15 rutas** registradas, servidor arranca limpio
 
-### Recomendación
+### Próximas sesiones: sin tareas pendientes obligatorias
 
-```
-Tarea C — Migración Jinja2 (4-6 horas)
-  Solo si sobra tiempo después de la demo. NO hacer antes del viernes.
-  Es mejora de calidad de código, no de funcionalidad.
-  El sistema funciona perfectamente sin este cambio (tal como está ahora).
-```
-
-La migración está detallada paso a paso en la **Sección 3** de este documento (pasos 1-5, templates, checklist). Seguir ese orden.
+Todo lo pendiente es mejora opcional:
+- TC08: intentar resolver con prompt engineering (bajo impacto, riesgo de regresión)
+- Migración a Supabase o PostgreSQL (descartada por decisión del tutor)
+- Tests unitarios por módulo (no requeridos para la demo)
 
 ---
 
-*Documento actualizado 2026-06-14. Estado del sistema al cierre: commit `3c9c548`, 11/12 (92%), Macro F1 93.94%. Push enviado a `origin/main`.*
+*Documento actualizado 2026-06-15. Estado del sistema al cierre: commit `4fcc010`, 11/12 (92%), Macro F1 93.94%. Tareas A, B y C completadas.*
