@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+{% block title %}Link Seguro — Dashboard{% endblock %}
+
+{% block content %}
+<div class="pt-20 px-6 pb-8 max-w-[1800px] mx-auto">
+
+  {# Countdown bar #}
+  <div class="flex items-center justify-end mb-5">
+    <div class="flex items-center gap-3">
+      <span class="text-sm text-[#8A8B85]">Próxima actualización en <span id="cd" class="text-[#6E8F73] font-semibold">30</span>s</span>
+      <div class="w-32 h-1 bg-[#E9E6DD] rounded-full overflow-hidden">
+        <div id="progress-bar" class="h-full bg-[#6E8F73] rounded-full" style="width:100%"></div>
+      </div>
+    </div>
+  </div>
+
+  {# Stats cards #}
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+    <div class="bg-[#FFFFFF] border border-[#E9E6DD] rounded-2xl p-6" style="border-left:4px solid #7A95C2">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-base text-[#8A8B85]">Total</span>
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 text-[#7A95C2]" viewBox="0 0 24 24" fill="currentColor"><path d="M5.625 1.5c-1.036 0-1.875.84-1.875 1.875v17.25c0 1.035.84 1.875 1.875 1.875h12.75c1.035 0 1.875-.84 1.875-1.875V12.75A3.75 3.75 0 0016.5 9h-1.875a1.875 1.875 0 01-1.875-1.875V5.25A3.75 3.75 0 009 1.5H5.625z"/><path d="M12.971 1.816A5.23 5.23 0 0114.25 5.25v1.875c0 .207.168.375.375.375H16.5a5.23 5.23 0 013.434 1.279 9.768 9.768 0 00-6.963-6.963z"/></svg>
+      </div>
+      <div class="text-4xl font-bold text-[#7A95C2]">{{ total }}</div>
+      <div class="text-base text-[#8A8B85] mt-1">conversaciones</div>
+    </div>
+    <div class="bg-[#FFFFFF] border border-[#E9E6DD] rounded-2xl p-6" style="border-left:4px solid #C2554B">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-base text-[#8A8B85]">HIGH</span>
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 text-[#C2554B]" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clip-rule="evenodd"/></svg>
+      </div>
+      <div class="text-4xl font-bold text-[#C2554B]">{{ high_count }}</div>
+      <div class="text-base text-[#8A8B85] mt-1">alto riesgo</div>
+    </div>
+    <div class="bg-[#FFFFFF] border border-[#E9E6DD] rounded-2xl p-6" style="border-left:4px solid #B59628">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-base text-[#8A8B85]">MEDIUM</span>
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 text-[#B59628]" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm8.706-1.442c1.146-.573 2.437.463 2.126 1.706l-.709 2.836.042-.02a.75.75 0 01.67 1.34l-.04.022c-1.147.573-2.438-.463-2.127-1.706l.71-2.836-.042.02a.75.75 0 11-.671-1.34l.041-.022zM12 9a.75.75 0 100-1.5.75.75 0 000 1.5z" clip-rule="evenodd"/></svg>
+      </div>
+      <div class="text-4xl font-bold text-[#B59628]">{{ medium_count }}</div>
+      <div class="text-base text-[#8A8B85] mt-1">riesgo medio</div>
+    </div>
+    <div class="bg-[#FFFFFF] border border-[#E9E6DD] rounded-2xl p-6" style="border-left:4px solid #6E8F73">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-base text-[#8A8B85]">LOW</span>
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 text-[#6E8F73]" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clip-rule="evenodd"/></svg>
+      </div>
+      <div class="text-4xl font-bold text-[#6E8F73]">{{ low_count }}</div>
+      <div class="text-base text-[#8A8B85] mt-1">bajo riesgo</div>
+    </div>
+    <div class="bg-[#FFFFFF] border border-[#E9E6DD] rounded-2xl p-6" style="border-left:4px solid #8A8B85">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-base text-[#8A8B85]">Último análisis</span>
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-10 h-10 text-[#8A8B85]" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zM12.75 6a.75.75 0 00-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 000-1.5h-3.75V6z" clip-rule="evenodd"/></svg>
+      </div>
+      <div class="text-base font-mono font-semibold text-[#8A8B85]">{{ last_analysis }}</div>
+      <div class="text-sm text-[#8A8B85] mt-1">GMT-3 Mendoza</div>
+    </div>
+  </div>
+
+  {# Filter bar (admin only) #}
+  {% if user.es_admin and usuarios_list %}
+  <div class="flex gap-2 items-center mb-5 flex-wrap">
+    <span class="text-sm text-[#8A8B85] uppercase tracking-wider mr-1">Filtrar:</span>
+    <a href="/dashboard"
+       class="py-1.5 px-4 rounded-full border text-sm no-underline transition-colors {{ 'border-[#7A95C2] text-[#4A6A99] bg-[#C9D6E8] font-bold' if not filtro_activo else 'border-[#E9E6DD] text-[#8A8B85]' }}">
+      Todas las cuentas
+    </a>
+    {% for u in usuarios_list %}{% if u.ig_username %}
+    <a href="/dashboard?filtro={{ u.ig_username }}"
+       class="py-1.5 px-4 rounded-full border text-sm no-underline transition-colors {{ 'border-[#7A95C2] text-[#4A6A99] bg-[#C9D6E8] font-bold' if u.ig_username == filtro_activo else 'border-[#E9E6DD] text-[#8A8B85]' }}">
+      @{{ u.ig_username }}
+    </a>
+    {% endif %}{% endfor %}
+  </div>
+  {% endif %}
+
+  {# Conversations table #}
+  <div class="overflow-x-auto rounded-2xl border border-[#E9E6DD]">
+    <table>
+      <thead>
+        <tr class="bg-[#FFFFFF] border-b border-[#E9E6DD]">
+          <th class="text-left text-sm uppercase tracking-wider text-[#8A8B85] py-4 px-4 whitespace-nowrap">Usuario</th>
+          <th class="text-left text-sm uppercase tracking-wider text-[#8A8B85] py-4 px-4 whitespace-nowrap">Riesgo</th>
+          <th class="text-left text-sm uppercase tracking-wider text-[#8A8B85] py-4 px-4 whitespace-nowrap">Categoría</th>
+          <th class="text-left text-sm uppercase tracking-wider text-[#8A8B85] py-4 px-4 whitespace-nowrap">MITRE</th>
+          <th class="text-center text-sm uppercase tracking-wider text-[#8A8B85] py-4 px-4 whitespace-nowrap">Score</th>
+          <th class="text-left text-sm uppercase tracking-wider text-[#8A8B85] py-4 px-4 whitespace-nowrap">Lifecycle</th>
+          <th class="text-left text-sm uppercase tracking-wider text-[#8A8B85] py-4 px-4 whitespace-nowrap">Acción</th>
+          <th class="text-center text-sm uppercase tracking-wider text-[#8A8B85] py-4 px-4 whitespace-nowrap">Alerta</th>
+          <th class="text-left text-sm uppercase tracking-wider text-[#8A8B85] py-4 px-4 whitespace-nowrap">Último msg</th>
+          <th class="text-left text-sm uppercase tracking-wider text-[#8A8B85] py-4 px-4 whitespace-nowrap">Detalle</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% if not conversations %}
+      <tr><td colspan="10" class="text-center py-10 text-[#8A8B85] text-base">No hay análisis registrados todavía</td></tr>
+      {% endif %}
+      {% for conv in conversations %}
+      {% set i = loop.index0 %}
+      {# Main row #}
+      <tr class="conv-row cursor-pointer transition-all"
+          style="background:{{ conv.row_bg }}; border-left:5px solid {{ conv.row_border }};"
+          onclick="toggleDetail({{ i }})">
+        <td class="py-4 px-4">
+          {% if conv.usuario_is_named %}
+          <span class="font-mono text-[#6E8F73]">{{ conv.usuario_display }}</span>
+          {% else %}
+          <span class="font-mono text-[#8A8B85]">{{ conv.usuario_display }}</span>
+          {% endif %}
+        </td>
+        <td class="py-4 px-4">
+          <span class="inline-block text-sm py-1 px-3 rounded-full font-semibold border"
+                style="background:{{ conv.risk_bg }}; color:{{ conv.risk_color }}; border-color:{{ conv.risk_color }};">
+            {{ conv.risk_emoji }} {{ conv.risk_level_actual or 'LOW' }}
+          </span>
+        </td>
+        <td class="py-4 px-4 text-base text-[#8A8B85] font-mono">{{ conv.categoria_ataque or '—' }}</td>
+        <td class="py-4 px-4 text-base text-[#8A8B85] font-mono">{{ conv.tecnica_mitre or '—' }}</td>
+        <td class="py-4 px-4 text-center">
+          <span class="font-mono text-base font-semibold" style="color:{{ conv.risk_color }};">{{ conv.score_str }}</span>
+          <div class="w-20 h-2 bg-[#E9E6DD] rounded-full mt-1 mx-auto overflow-hidden">
+            <div class="h-full rounded-full" style="width:{{ conv.score_pct }}%;background:{{ conv.risk_color }};"></div>
+          </div>
+        </td>
+        <td class="py-4 px-4 text-base text-[#8A8B85] font-mono">{{ conv.etapa_lifecycle or '—' }}</td>
+        <td class="py-4 px-4 text-base text-[#8A8B85] font-mono">{{ conv.accion_recomendada or '—' }}</td>
+        <td class="py-4 px-4 text-center">
+          {% if conv.respuesta_enviada %}
+          <span class="inline-block text-sm py-1 px-3 rounded-xl bg-[#E8F3EA] text-[#6E8F73] border border-[#6E8F73] font-medium whitespace-nowrap">✅ Alertado</span>
+          {% elif conv.risk_level_actual == 'HIGH' %}
+          <span class="inline-block text-sm py-1 px-3 rounded-xl bg-[#F5E9C2] text-[#B59628] border border-[#B59628] font-medium whitespace-nowrap">⏳ Pendiente</span>
+          {% else %}
+          <span class="text-[#8A8B85]">—</span>
+          {% endif %}
+        </td>
+        <td class="py-4 px-4 text-base font-mono text-[#8A8B85] whitespace-nowrap">{{ conv.ultimo_fmt }}</td>
+        <td class="py-4 px-4">
+          <button class="flex items-center gap-1 text-sm py-2 px-4 rounded-lg bg-[#F7F5EE] hover:bg-[#E9E6DD] text-[#1B1D1C] border border-[#E9E6DD] cursor-pointer transition-colors whitespace-nowrap"
+                  id="btn-{{ i }}" onclick="event.stopPropagation();toggleDetail({{ i }})">
+            <span id="chevron-{{ i }}" style="display:inline-block;transition:transform 0.2s;">▼</span> Ver
+          </button>
+        </td>
+      </tr>
+      {# Detail row (hidden by default) #}
+      <tr id="detail-{{ i }}" style="display:none;">
+        <td colspan="10" class="p-0 border-b-2 border-[#E9E6DD]">
+          <div class="bg-[#F7F5EE] p-6 rounded-b-2xl grid grid-cols-1 md:grid-cols-2 gap-4">
+
+            <div class="bg-[#FFFFFF] border border-[#E9E6DD] rounded-xl p-4">
+              <p class="text-base font-semibold uppercase tracking-wider text-[#8A8B85] mb-3">Explicación para el usuario</p>
+              <p class="text-base text-[#1B1D1C] leading-relaxed">{{ conv.explicacion_usuario or '—' }}</p>
+            </div>
+
+            <div class="bg-[#FFFFFF] border border-[#E9E6DD] rounded-xl p-4">
+              <p class="text-base font-semibold uppercase tracking-wider text-[#8A8B85] mb-3">Explicación técnica (analista)</p>
+              <p class="text-sm font-mono text-[#1B1D1C] leading-relaxed">{{ conv.explicacion_analista or '—' }}</p>
+            </div>
+
+            <div class="bg-[#FFFFFF] border border-[#E9E6DD] rounded-xl p-4">
+              <p class="text-base font-semibold uppercase tracking-wider text-[#8A8B85] mb-3">Principios de Cialdini</p>
+              <div class="flex flex-wrap gap-1">
+                {% for p in conv.principios_cialdini %}
+                <span class="inline-block text-sm py-1 px-3 rounded-full bg-[#F5E9C2] text-[#B59628] border border-[#B59628] m-0.5">{{ p }}</span>
+                {% else %}
+                <span class="text-[#8A8B85]">—</span>
+                {% endfor %}
+              </div>
+            </div>
+
+            <div class="bg-[#FFFFFF] border border-[#E9E6DD] rounded-xl p-4">
+              <p class="text-base font-semibold uppercase tracking-wider text-[#8A8B85] mb-3">URLs sospechosas</p>
+              <div>
+                {% for u in conv.urls_sospechosas %}
+                {% if u is mapping %}
+                <div class="flex gap-2 items-start py-1.5 border-b border-[#E9E6DD] text-sm">
+                  <span class="text-[#C2554B] font-mono break-all">{{ u.get('url', '') }}</span>
+                  <span class="text-[#8A8B85] italic shrink-0">— {{ u.get('razon') or u.get('reason', '') }}</span>
+                </div>
+                {% else %}
+                <div class="py-1.5 text-sm font-mono text-[#C2554B]">{{ u }}</div>
+                {% endif %}
+                {% else %}
+                <span class="text-[#8A8B85]">—</span>
+                {% endfor %}
+              </div>
+            </div>
+
+            <div class="col-span-full bg-[#FFFFFF] border border-[#E9E6DD] rounded-xl p-4">
+              <p class="text-base font-semibold uppercase tracking-wider text-[#8A8B85] mb-3">Últimos 10 mensajes</p>
+              <div class="max-h-64 overflow-y-auto">
+                {% if conv.mensajes_display %}
+                {% for m in conv.mensajes_display %}
+                <div class="flex {{ 'justify-start' if m.es_entrante else 'justify-end' }} mb-2">
+                  <div class="{{ 'bg-[#F7F5EE] rounded-2xl rounded-tl-sm' if m.es_entrante else 'bg-[#E8F3EA] rounded-2xl rounded-tr-sm' }} px-4 py-2 max-w-[80%]">
+                    {% if m.texto_display is none %}
+                    <p class="text-base text-[#1B1D1C] break-words"><em class="text-[#8A8B85] text-sm">[contenido protegido — solo visible para el operador]</em></p>
+                    {% else %}
+                    <p class="text-base text-[#1B1D1C] break-words">{{ m.texto_display }}</p>
+                    {% endif %}
+                    <p class="text-xs text-[#8A8B85] mt-1">{{ m.ts_fmt }}</p>
+                  </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <p class="text-[#8A8B85] text-sm">— sin mensajes —</p>
+                {% endif %}
+              </div>
+            </div>
+
+            {% if conv.risk_level_actual in ('HIGH', 'MEDIUM') %}
+            <div class="col-span-2 bg-[#F0F8F0] border border-[#A8C8A8] rounded-xl p-5">
+              <p class="text-base font-semibold uppercase tracking-wider text-[#8A8B85] mb-3">Acciones manuales</p>
+              <div class="flex gap-3 flex-wrap">
+                {% if user.es_admin %}
+                <button class="btn-action btn-notificar flex items-center gap-2 text-base py-3 px-6 rounded-xl font-semibold bg-[#EEF3FA] border border-[#4A6A99] text-[#4A6A99] hover:bg-[#4A6A99] hover:text-white transition-colors cursor-pointer"
+                        data-id="{{ conv.id_conversacion }}" onclick="accionNotificar(this)">
+                  📧 Notificar usuario
+                </button>
+                {% endif %}
+                {% if conv.respuesta_enviada %}
+                <span class="inline-flex items-center gap-2 text-base py-2 px-4 rounded-xl bg-[#E8F3EA] text-[#6E8F73] border border-[#6E8F73] font-medium">✅ DM automático enviado</span>
+                {% endif %}
+                <a href="/conversacion/{{ conv.id_conversacion }}/pdf" target="_blank"
+                   class="inline-flex items-center gap-2 text-base py-3 px-6 rounded-xl font-semibold bg-[#F7F5EE] border border-[#1B1D1C] text-[#1B1D1C] hover:bg-[#1B1D1C] hover:text-white transition-colors no-underline">
+                  ⬇ Exportar PDF
+                </a>
+              </div>
+            </div>
+            {% else %}
+            <div class="col-span-2 bg-[#F7F5EE] border border-[#E9E6DD] rounded-xl p-5">
+              <p class="text-base font-semibold uppercase tracking-wider text-[#8A8B85] mb-3">Acciones manuales</p>
+              <div class="flex gap-3 flex-wrap items-center">
+                <span class="text-sm text-[#8A8B85]">— Sin riesgo detectado —</span>
+                <a href="/conversacion/{{ conv.id_conversacion }}/pdf" target="_blank"
+                   class="inline-flex items-center gap-2 text-base py-3 px-6 rounded-xl font-semibold bg-[#F7F5EE] border border-[#1B1D1C] text-[#1B1D1C] hover:bg-[#1B1D1C] hover:text-white transition-colors no-underline">
+                  ⬇ Exportar PDF
+                </a>
+              </div>
+            </div>
+            {% endif %}
+
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+(function () {
+  var total = 30;
+  var secs = total;
+  var el = document.getElementById('cd');
+  var bar = document.getElementById('progress-bar');
+  setInterval(function () {
+    secs--;
+    if (secs <= 0) secs = total;
+    el.textContent = secs;
+    bar.style.width = (secs / total * 100) + '%';
+  }, 1000);
+})();
+
+function toggleDetail(i) {
+  var row = document.getElementById('detail-' + i);
+  var chevron = document.getElementById('chevron-' + i);
+  if (row.style.display === 'none') {
+    row.style.display = '';
+    chevron.style.transform = 'rotate(180deg)';
+  } else {
+    row.style.display = 'none';
+    chevron.style.transform = '';
+  }
+}
+
+async function _accion(endpoint, btn, labelOk, labelErr) {
+  var original = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Enviando...';
+  try {
+    var r = await fetch(endpoint, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: 'id_conversacion=' + encodeURIComponent(btn.dataset.id)
+    });
+    var data = await r.json();
+    if (data.ok) {
+      btn.innerHTML = '✅ ' + (data.message || labelOk);
+      btn.classList.add('success');
+    } else {
+      btn.innerHTML = '❌ ' + (data.message || labelErr);
+      btn.classList.add('error');
+      setTimeout(function() {
+        btn.innerHTML = original;
+        btn.classList.remove('error');
+        btn.disabled = false;
+      }, 4000);
+    }
+  } catch(e) {
+    btn.innerHTML = '❌ Error de red';
+    btn.classList.add('error');
+    setTimeout(function() {
+      btn.innerHTML = original;
+      btn.classList.remove('error');
+      btn.disabled = false;
+    }, 4000);
+  }
+}
+
+function accionNotificar(btn) {
+  _accion('/dashboard/accion/notificar', btn, 'Email enviado', 'No se pudo notificar');
+}
+</script>
+{% endblock %}

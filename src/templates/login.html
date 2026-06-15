@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Link Seguro — Login{% endblock %}
+{% block meta_extra %}{% endblock %}
+{% block body_class %}min-h-screen bg-[#ECEAE3] flex items-center justify-center px-4{% endblock %}
+{% block navbar %}{% endblock %}
+{% block head_extra %}
+<style>
+  input:focus { outline: none; border-color: #7A95C2 !important; box-shadow: 0 0 0 2px rgba(122,149,194,0.25); }
+</style>
+{% endblock %}
+
+{% block content %}
+<form method="post" action="/login" class="w-full max-w-md bg-[#FFFFFF] border border-[#E9E6DD] rounded-2xl shadow-2xl p-10">
+
+  <div class="flex flex-col items-center mb-8">
+    <img src="/static/logo.png" alt="Link Seguro" class="h-40 w-auto mb-2 drop-shadow-sm">
+    <p class="text-base text-[#8A8B85] mt-1">Sistema de detección de phishing</p>
+  </div>
+
+  {% if error %}
+  <div class="mb-5 flex items-center gap-3 rounded-xl border border-[#C2554B] bg-[#FEF2F2] px-4 py-3 text-base text-[#C2554B]">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+    {{ error }}
+  </div>
+  {% endif %}
+
+  <div class="mb-5">
+    <label for="username" class="block text-base font-medium text-[#1B1D1C] mb-2">Usuario o email</label>
+    <input id="username" name="username" type="text" required autofocus autocomplete="username"
+      placeholder="usuario o correo electrónico"
+      class="w-full text-lg py-3 px-4 rounded-xl bg-[#F7F5EE] border border-[#E9E6DD] text-[#1B1D1C] placeholder-[#8A8B85] transition-colors">
+  </div>
+
+  <div class="mb-6">
+    <label for="password" class="block text-base font-medium text-[#1B1D1C] mb-2">Contraseña</label>
+    <div class="relative">
+      <input id="password" name="password" type="password" required autocomplete="current-password"
+        placeholder="••••••••"
+        class="w-full text-lg py-3 px-4 pr-12 rounded-xl bg-[#F7F5EE] border border-[#E9E6DD] text-[#1B1D1C] placeholder-[#8A8B85] transition-colors">
+      <button type="button" onclick="togglePwd()" class="absolute inset-y-0 right-0 px-4 text-[#8A8B85] hover:text-[#1B1D1C]" tabindex="-1">
+        <svg id="eye-show" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
+          <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/>
+        </svg>
+        <svg id="eye-hide" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 hidden" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clip-rule="evenodd"/>
+          <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.064 7 9.542 7 .847 0 1.669-.105 2.454-.303z"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <button type="submit"
+    class="w-full text-lg py-3 font-semibold rounded-xl bg-[#7A95C2] hover:bg-[#4A6A99] text-white cursor-pointer transition-colors">
+    Ingresar
+  </button>
+</form>
+
+<script>
+function togglePwd() {
+  var inp = document.getElementById('password');
+  var show = document.getElementById('eye-show');
+  var hide = document.getElementById('eye-hide');
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    show.classList.add('hidden');
+    hide.classList.remove('hidden');
+  } else {
+    inp.type = 'password';
+    show.classList.remove('hidden');
+    hide.classList.add('hidden');
+  }
+}
+</script>
+{% endblock %}
