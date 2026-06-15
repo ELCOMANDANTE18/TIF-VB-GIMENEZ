@@ -100,7 +100,7 @@ Trabajo Integrador Final (TIF) — Ingeniería en Sistemas de Información, Univ
 | System prompt | `app/ai/prompts.py` | Prompt especializado con MITRE + APWG + Cialdini |
 | Conversation observer | `app/analysis/conversation_observer.py` | Análisis holístico periódico (mensajes 3, 5, 10, luego cada 5) |
 | SQLite client | `app/db/sqlite_client.py` | CRUD asíncrono sobre las 3 tablas |
-| Dashboard | `app/dashboard/router.py` | HTML generado en servidor, auto-refresh 30s, sin JS framework |
+| Dashboard | `app/dashboard/router.py` + `src/templates/` | Jinja2 templates, auto-refresh 30s, sin JS framework |
 | Config | `app/config.py` | Variables de entorno via pydantic-settings |
 
 ### Por qué se eligió cada tecnología
@@ -157,7 +157,7 @@ Fusión de scores: `final_score = max(heuristic_score, severity_to_score[ai_risk
 
 ### Capa 4 — Persistencia y visualización
 
-SQLite con 3 tablas relacionadas (ver sección de base de datos). El dashboard en `GET /dashboard` genera HTML puro en servidor con auto-refresh cada 30 segundos. Muestra tarjetas de resumen (total, HIGH, MEDIUM, LOW, último análisis) y una tabla ordenada por severidad. Cada fila es expandible para ver explicaciones, principios de Cialdini, URLs sospechosas e historial de los últimos 10 mensajes.
+SQLite con 3 tablas relacionadas (ver sección de base de datos). El dashboard en `GET /dashboard` usa Jinja2 templates (`src/templates/`) con auto-refresh cada 30 segundos. Muestra tarjetas de resumen (total, HIGH, MEDIUM, LOW, último análisis) y una tabla ordenada por severidad. Cada fila es expandible para ver explicaciones, principios de Cialdini, URLs sospechosas e historial de los últimos 10 mensajes. En vista admin, la columna "Usuario" incluye `↳ @cuenta` para identificar a qué cuenta monitoreada pertenece cada conversación.
 
 ---
 

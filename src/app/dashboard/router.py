@@ -94,7 +94,8 @@ def get_dashboard_data(ig_user_id: str | None = None) -> dict:
                 a.principios_cialdini,
                 a.urls_sospechosas,
                 a.respuesta_enviada,
-                a.analizado_at
+                a.analizado_at,
+                u.ig_username AS cuenta_ig_username
             FROM conversacion c
             LEFT JOIN analisis_conversacion a
                 ON c.id_conversacion = a.id_conversacion
@@ -103,6 +104,7 @@ def get_dashboard_data(ig_user_id: str | None = None) -> dict:
                     FROM analisis_conversacion
                     WHERE id_conversacion = c.id_conversacion
                 )
+            LEFT JOIN usuario_sistema u ON u.ig_user_id = c.cuenta_monitoreada
             {where_clause}
             ORDER BY
                 CASE c.risk_level_actual
@@ -237,6 +239,7 @@ def _enrich_conversations(conversations: list, is_admin: bool) -> list:
         pid   = str(c.get("participante_id") or "")
         c["usuario_display"]  = f"@{uname}" if uname else f"...{pid[-8:]}"
         c["usuario_is_named"] = bool(uname)
+        c["cuenta_username"]  = c.get("cuenta_ig_username") or ""
 
         score = c.get("score_final")
         c["score_str"] = f"{score:.2f}" if score is not None else "—"

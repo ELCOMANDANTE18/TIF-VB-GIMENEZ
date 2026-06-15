@@ -108,6 +108,9 @@
           {% else %}
           <span class="font-mono text-[#8A8B85]">{{ conv.usuario_display }}</span>
           {% endif %}
+          {% if user.es_admin and conv.cuenta_username %}
+          <div class="text-xs text-[#8A8B85] font-mono mt-0.5">↳ @{{ conv.cuenta_username }}</div>
+          {% endif %}
         </td>
         <td class="py-4 px-4">
           <span class="inline-block text-sm py-1 px-3 rounded-full font-semibold border"

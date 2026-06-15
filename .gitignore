@@ -100,11 +100,7 @@ ngrok-v3-stable-linux-amd64.tgz
 *.bak
 
 # ── Claude Code ───────────────────────────────────────────────
-CLAUDE.md
-claude.md
 .claude/
-AGENTS.md
-agents.md
 
 # ── Archivos locales de sesión / notas de trabajo ────────────
 ESTADO_PROYECTO.txt
