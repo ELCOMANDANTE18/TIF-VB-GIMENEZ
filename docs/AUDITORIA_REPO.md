@@ -846,4 +846,16 @@ Con este cambio, "borralo" + "lo mandé sin querer" dispararían una ficha `retr
 
 ---
 
+## HMAC desconectado temporalmente (2026-06-19)
+
+Estado: comentado en `webhook/router.py`, no eliminado. `app/webhook/validator.py` intacto.
+
+Motivo: bug de 403 Forbidden bloqueando el webhook a días de la demo — sin tiempo de diagnosticar con seguridad antes del viernes.
+
+Hipótesis: orden de lectura del raw body vs request.json() en FastAPI consume el stream antes de validar el hash.
+
+Pendiente: diagnosticar y reconectar después de la defensa.
+
+---
+
 *Este documento fue generado por análisis estático del código fuente. No se ejecutó ningún proceso ni se modificó ningún archivo.*

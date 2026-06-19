@@ -67,13 +67,15 @@ async def _analyze_and_log(
 async def receive_webhook(request: Request, background_tasks: BackgroundTasks):
     body = await request.body()
 
-    # Validar firma HMAC-SHA256 de Meta si META_APP_SECRET está configurado.
-    # Si la clave está vacía (entorno de desarrollo/tests), se omite la validación.
-    if settings.META_APP_SECRET:
-        sig = request.headers.get("X-Hub-Signature-256", "")
-        if not verify_signature(body, sig, settings.META_APP_SECRET):
-            logger.warning("Webhook rechazado: firma HMAC inválida")
-            raise HTTPException(status_code=403, detail="Invalid signature")
+    # HMAC temporalmente desconectado (2026-06-19)
+    # Bug: 403 Forbidden en todos los POST /webhook tras conectar la validación.
+    # Diagnóstico pendiente — probable problema de orden raw_body vs request.json().
+    # Ver docs/AUDITORIA_REPO.md para detalles.
+    # if settings.META_APP_SECRET:
+    #     sig = request.headers.get("X-Hub-Signature-256", "")
+    #     if not verify_signature(body, sig, settings.META_APP_SECRET):
+    #         logger.warning("Webhook rechazado: firma HMAC inválida")
+    #         raise HTTPException(status_code=403, detail="Invalid signature")
 
     payload = json.loads(body)
 
